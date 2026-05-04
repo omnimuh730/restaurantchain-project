@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Social'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-social` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-social.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me/daily-bonus:
+    get: { $ref: '#/x-operations/GetDailyBonus' }
+  /me/daily-bonus:claim:
+    post: { $ref: '#/x-operations/ClaimDailyBonus' }
+  /me/friend-requests:
+    get: { $ref: '#/x-operations/ListFriendRequests' }
+    post: { $ref: '#/x-operations/SendFriendRequest' }
+  /me/friends:
+    get: { $ref: '#/x-operations/ListFriends' }
+  /me/recent-searches:
+    delete: { $ref: '#/x-operations/ClearRecentSearches' }
+    get: { $ref: '#/x-operations/ListRecentSearches' }
+    post: { $ref: '#/x-operations/PushRecentSearch' }
+  /me/referral:
+    get: { $ref: '#/x-operations/GetReferral' }
+  /me/referral:redeem:
+    post: { $ref: '#/x-operations/RedeemReferralCode' }
+  /me/saved-items:
+    get: { $ref: '#/x-operations/ListSavedItems' }
+    post: { $ref: '#/x-operations/AddSavedItem' }
+  /me/friend-invites/by-phone:
+    post: { $ref: '#/x-operations/InviteFriendByPhone' }
+  /me/friend-requests/{requestId}:accept:
+    post: { $ref: '#/x-operations/AcceptFriendRequest' }
+  /me/friend-requests/{requestId}:decline:
+    post: { $ref: '#/x-operations/DeclineFriendRequest' }
+  /me/friends/{friendId}:
+    delete: { $ref: '#/x-operations/RemoveFriend' }
+  /me/saved-items/{savedItemId}:
+    delete: { $ref: '#/x-operations/DeleteSavedItem' }
+
+x-operations:
+  # Saved items, recent searches, friends + friend requests, daily bonus, referral.
+
+  # ---------- Saved items ----------
+
+  ListSavedItems:
+    tags: [Customer · Social]
+    operationId: listSavedItems
+    summary: List saved restaurants and dishes.
+    parameters:
+      - name: itemType
+        in: query
+        schema: { type: string, enum: [restaurant, food, all], default: all }
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Saved items.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/SavedItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  AddSavedItem:
+    tags: [Customer · Social]
+    operationId: addSavedItem
+    summary: Save a restaurant or dish.
+    description: 'Idempotent on `(itemType, restaurantId|foodId)`.'
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - type: object
+                required: [itemType, restaurantId]
+                properties:
+                  itemType:     { const: restaurant }
+                  restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              - type: object
+                required: [itemType, restaurantId, foodId]
+                properties:
+                  itemType:     { const: food }
+                  restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  foodId:       { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '201':
+        description: Saved (or returned existing if idempotent).
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/SavedItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Restaurant or food not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteSavedItem:
+    tags: [Customer · Social]
+    operationId: deleteSavedItem
+    summary: Remove a saved item. Idempotent.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/SavedItemIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Recent searches ----------
+
+  ListRecentSearches:
+    tags: [Customer · Social]
+    operationId: listRecentSearches
+    summary: List the last 30 search terms (most recent first).
+    parameters:
+      - name: kind
+        in: query
+        schema: { type: string, enum: [restaurant, cuisine, location, all], default: all }
+    responses:
+      '200':
+        description: Recent searches.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/RecentSearch' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  PushRecentSearch:
+    tags: [Customer · Social]
+    operationId: pushRecentSearch
+    summary: Push a search query into the recent list.
+    description: |
+      The server keeps at most 30 entries per user, dropping the oldest.
+      Duplicates of the same `(kind, query)` are de-duplicated and bubble to the top.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [kind, query]
+            properties:
+              kind:         { type: string, enum: [restaurant, cuisine, location] }
+              query:        { type: string, minLength: 1, maxLength: 200 }
+              restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              cuisineCode:  { type: string }
+              locationId:   { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  ClearRecentSearches:
+    tags: [Customer · Social]
+    operationId: clearRecentSearches
+    summary: Clear all recent searches.
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  # ---------- Friends ----------
+
+  ListFriends:
+    tags: [Customer · Social]
+    operationId: listFriends
+    summary: List accepted friends.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Friends.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/Friend' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  RemoveFriend:
+    tags: [Customer · Social]
+    operationId: removeFriend
+    summary: Unfriend or revoke a request.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/FriendIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  ListFriendRequests:
+    tags: [Customer · Social]
+    operationId: listFriendRequests
+    summary: List incoming and outgoing friend requests.
+    parameters:
+      - name: direction
+        in: query
+        schema: { type: string, enum: [incoming, outgoing, all], default: all }
+    responses:
+      '200':
+        description: Friend requests.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Friend' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  SendFriendRequest:
+    tags: [Customer · Social]
+    operationId: sendFriendRequest
+    summary: Send a friend request by username.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [username]
+            properties:
+              username: { type: string }
+    responses:
+      '201':
+        description: Request sent (or accepted if the other side already requested).
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Friend' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Username not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Already friends, blocked, or self-request.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              self:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conflict, status: 409, code: cannot_invite_self }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  AcceptFriendRequest:
+    tags: [Customer · Social]
+    operationId: acceptFriendRequest
+    summary: Accept an incoming friend request.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/FriendRequestIdPath'
+    responses:
+      '200':
+        description: Now friends.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Friend' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Request already decided.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  DeclineFriendRequest:
+    tags: [Customer · Social]
+    operationId: declineFriendRequest
+    summary: Decline an incoming friend request.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/FriendRequestIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  InviteFriendByPhone:
+    tags: [Customer · Social]
+    operationId: inviteFriendByPhone
+    deprecated: true
+    summary: Invite a friend by phone number (sends SMS deep link).
+    description: |
+      Deprecated. Phone-based friend invites are no longer part of the social schema.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [phone]
+            properties:
+              phone:   { type: string, example: '+8210123456789' }
+              message: { type: string, maxLength: 240 }
+    responses:
+      '202':
+        description: Invite queued.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:           { type: string, enum: [request_sent, sms_sent] }
+                friend:           { $ref: '../components/schemas.yaml#/components/schemas/Friend' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  # ---------- Daily bonus ----------
+
+  GetDailyBonus:
+    tags: [Customer · Social]
+    operationId: getDailyBonus
+    summary: Read today's daily-bonus state.
+    description: |
+      Returns the three boxes shown on the **Profile → Daily Bonus** banner along with
+      whether the user has already claimed today.
+    responses:
+      '200':
+        description: Daily bonus state.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [localDate, alreadyClaimed, boxes]
+              properties:
+                localDate:      { type: string, format: date }
+                alreadyClaimed: { type: boolean }
+                boxes:
+                  type: array
+                  minItems: 3
+                  maxItems: 3
+                  items:
+                    type: object
+                    required: [index, hint]
+                    properties:
+                      index: { type: integer, enum: [0, 1, 2] }
+                      hint:  { type: string, description: 'Server-side teaser; the actual reward is hidden until the claim.' }
+                streakDays: { type: integer, minimum: 0 }
+                history:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/DailyBonus/properties/history/items' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  ClaimDailyBonus:
+    tags: [Customer · Social]
+    operationId: claimDailyBonus
+    summary: Claim a box.
+    description: |
+      Server picks the reward server-side based on the chosen box index and the current
+      rotation. Idempotent for `(userId, localDate)`. Repeated calls with the same date
+      return 409.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [boxIndex]
+            properties:
+              boxIndex: { type: integer, enum: [0, 1, 2] }
+    responses:
+      '200':
+        description: Reward granted.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reward, balanceAfter]
+              properties:
+                reward:       { $ref: '../components/schemas.yaml#/components/schemas/DailyBonusReward' }
+                walletTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                pointsLedgerId:      { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                balanceAfter:
+                  type: object
+                  description: 'Caches updated.'
+                  properties:
+                    rewardsPoints: { type: integer }
+                    bonusBalance:  { $ref: '../components/common.yaml#/components/schemas/Money' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '409':
+        description: Already claimed today.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already claimed, status: 409, code: daily_bonus_already_claimed }
+
+  # ---------- Referral ----------
+
+  GetReferral:
+    tags: [Customer · Social]
+    operationId: getReferral
+    summary: Read referral code, share link, and redemption history.
+    responses:
+      '200':
+        description: Referral info.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, shareUrl, redemptions]
+              properties:
+                code:        { type: string, example: SARAH-7Q3 }
+                shareUrl:    { type: string, format: uri-reference }
+                referredByCode: { type: [string, 'null'] }
+                redemptions:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Referral/properties/redemptions/items' }
+                reward:
+                  $ref: '../components/common.yaml#/components/schemas/Money'
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  RedeemReferralCode:
+    tags: [Customer · Social]
+    operationId: redeemReferral
+    summary: Redeem a friend's referral code (must not have redeemed before).
+    description: |
+      Sign-up usually carries `referralCode`; this endpoint exists for users who skipped
+      that step. One-shot: returns 409 if already redeemed.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string, example: SARAH-7Q3 }
+    responses:
+      '200':
+        description: Redeemed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                walletTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                pointsLedgerId:      { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                reward:
+                  $ref: '../components/common.yaml#/components/schemas/Money'
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Unknown code.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              invalid:
+                value: { type: 'https://errors.catchtable.example/not_found', title: Invalid code, status: 404, code: referral_code_invalid }
+      '409':
+        description: Already redeemed or self-referral.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              self:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conflict, status: 409, code: referral_self_redeem }
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already redeemed, status: 409, code: referral_already_redeemed }

@@ -1,0 +1,32 @@
+flowchart LR
+%% The same pattern is used for both wallets and rewards: an immutable ledger
+%% collection plus a hot cache embedded on the user document. The cache is
+%% updated atomically with each ledger insert (multi-doc tx).
+    subgraph Reads["Hot reads"]
+        R1["GET /me/wallets"]
+        R2["GET /me/rewards"]
+    end
+    subgraph Writes["Authoritative writes"]
+        W1["POST /me/wallets/.../top-up"]
+        W2["POST /me/wallets/.../gift"]
+        W3["POST orders/{oid}/payments  (wallet)"]
+        W4["system: reservation_completed,<br/>review, daily-bonus, referral, etc."]
+    end
+
+    Cache[("customer_users.wallets<br/>customer_users.rewards<br/>(cache · O(1) read)")]
+    LedgerW[("wallet_transactions<br/>(append-only ledger)")]
+    LedgerP[("points_ledger<br/>(append-only ledger)")]
+
+    R1 --> Cache
+    R2 --> Cache
+
+    W1 -->|"insert ledger row<br/>+ update cache"| LedgerW
+    W2 --> LedgerW
+    W3 --> LedgerW
+    W4 -->|"may twin into both"| LedgerW
+    W4 --> LedgerP
+
+    LedgerW --> Cache
+    LedgerP --> Cache
+    LedgerW -. "GET /me/wallets/transactions<br/>(audit)" .-> Audit[Audit / dispute UI]
+    LedgerP -. "GET /me/rewards/points-ledger" .-> Audit

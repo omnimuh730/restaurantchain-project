@@ -1,0 +1,40 @@
+sequenceDiagram
+%% Staff-side counterpart actions. Each action appends a `timeline` entry.
+    autonumber
+    actor Pos as POS staff
+    participant API as API
+    participant Res as reservation
+    participant Pay as payments
+
+    Pos->>API: GET /pos/restaurants/{rid}/reservations?date=...
+    API-->>Pos: list grouped by status
+
+    rect rgb(232,244,255)
+    note right of Pos: APPROVE  (status=requested → confirmed)
+    Pos->>API: POST /pos/reservations/{rid}:approve<br/>(Idempotency-Key)
+    API->>Res: confirmed
+    API-->>Pos: 200
+    end
+
+    rect rgb(255,232,232)
+    note right of Pos: DECLINE → automatic deposit refund
+    Pos->>API: POST /pos/reservations/{rid}:decline { reason }
+    API->>Pay: create refund (reason=reservation_declined)
+    API->>Res: declined
+    API-->>Pos: 200
+    end
+
+    rect rgb(255,243,204)
+    note right of Pos: NO-SHOW  (after grace_elapsed)
+    Pos->>API: POST /pos/reservations/{rid}:no-show { waiveDeposit?: bool }
+    opt waive
+        API->>Pay: refund (reason=no_show_waiver)
+    end
+    API->>Res: no_show
+    end
+
+    rect rgb(228,245,228)
+    note right of Pos: SEAT  (POS-driven check-in alternative)
+    Pos->>API: POST /pos/reservations/{rid}:check-in
+    API->>Res: arrived → dining (when order opens)
+    end

@@ -1,0 +1,27 @@
+sequenceDiagram
+%% QR-based check-in. The customer scans the table QR; the API validates the
+%% rotated code, the grace window, and the table identity.
+    autonumber
+    actor Cust as Customer
+    participant App as Mobile app
+    participant API as API
+    participant Tbl as table.qrCode (rotating)
+    participant Res as reservation
+
+    Cust->>App: scan QR sticker
+    App->>API: POST /reservations/{rid}:check-in-by-qr<br/>{ qr: "<rotated-token>" }
+    API->>Tbl: validate token + currentVersion
+    alt qr_invalid
+        API-->>App: 400 qr_invalid
+    else qr_rotated
+        API-->>App: 409 qr_rotated  (try again)
+    else qr_table_mismatch
+        API-->>App: 409 qr_table_mismatch  (wrong table)
+    else qr_outside_grace_window
+        API-->>App: 409 qr_outside_grace_window
+    else ok
+        API->>Res: status confirmed → arrived<br/>append timeline.checked_in
+        API-->>App: 200 { reservation, table }
+        API-->>App: ws reservation.updated
+        Note right of API: POS staff also receives<br/>reservation.updated +<br/>table.updated.
+    end

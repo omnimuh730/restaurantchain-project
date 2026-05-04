@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Payments'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-payments` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-payments.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/payments/{paymentId}:
+    get: { $ref: '#/x-operations/GetPayment' }
+  /pos/payments/{paymentId}/refunds:
+    post: { $ref: '#/x-operations/CreateRefund' }
+  /pos/restaurants/{restaurantId}/payments:
+    get: { $ref: '#/x-operations/ListPayments' }
+
+x-operations:
+  # Payment queries (Analytics → History) and refunds.
+
+  ListPayments:
+    tags: [POS · Payments]
+    operationId: posListPayments
+    summary: List payments captured by the restaurant (Analytics → History compact tab).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: purpose
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [reservation_deposit, order_bill, wallet_top_up, subscription] }
+      - name: status
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [succeeded, voided] }
+      - name: methodKind
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [cash, credit, wallet] }
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Payments.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/Payment' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  GetPayment:
+    tags: [POS · Payments]
+    operationId: posGetPayment
+    summary: Read one payment with embedded refunds and PSP intent.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/PaymentIdPath'
+    responses:
+      '200':
+        description: Payment.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Payment' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  CreateRefund:
+    tags: [POS · Payments]
+    operationId: posCreateRefund
+    summary: Refund a captured payment (full or partial).
+    description: |
+      Embeds a new entry in `payments.refunds[]` and triggers the PSP refund. Wallet-paid
+      payments credit back to the same wallet pool via a `refund` `wallet_transactions`
+      entry. Idempotent on `Idempotency-Key`.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/PaymentIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount, reason]
+            properties:
+              amount: { $ref: '../components/common.yaml#/components/schemas/Money' }
+              reason: { type: string, enum: [reservation_declined, user_cancelled, no_show_waiver, order_voided, duplicate, other] }
+              note:   { type: string, maxLength: 500 }
+    responses:
+      '201':
+        description: Refund accepted; final state arrives via PSP webhook (poll the payment endpoint).
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/PaymentRefund' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403':
+        description: Lacks `payments.refund` permission.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Refund already in flight or amount exceeds remaining.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              exceeds:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Exceeds remaining, status: 409, code: refund_exceeds_net_amount }
+              duplicate:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already refunding, status: 409, code: refund_already_succeeded }
+      '422':
+        description: Currency mismatch.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '502':
+        description: PSP unreachable.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              psp:
+                value: { type: 'https://errors.catchtable.example/internal_error', title: PSP unreachable, status: 502, code: psp_unreachable }

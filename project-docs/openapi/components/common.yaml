@@ -1,0 +1,630 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Shared Common Components'
+  version: 1.0.0
+  description: |
+    Shared OpenAPI common components $refed from every path module and the root spec.
+    Wrapped as a standalone OpenAPI 3.1 doc (with `paths: {}`) so editors that require
+    a complete document can render it without a bundler.
+paths: {}
+
+# Shared OpenAPI components.
+# Bundlers inline these into the root spec; manual readers can $ref them.
+
+components:
+
+  # ---------- Security schemes ----------
+  securitySchemes:
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer JWT issued by `/auth/customer/sign-in` or `/auth/refresh`.
+        Required claims: `sub` (customer userId), `subjectKind="customer"`, `exp`.
+    staffAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer JWT issued by `/auth/staff/sign-in` or `/auth/refresh`.
+        Required claims: `sub` (staff userId), `subjectKind="staff"`, `restaurantId`,
+        `role` (`manager`/`waiter`/`chef`/`cashier`), `permissions[]`, `exp`.
+        POS endpoints under `/pos/restaurants/{restaurantId}/...` enforce that the
+        token's `restaurantId` claim equals the path parameter.
+    publicAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Optional bearer token. Endpoints accepting `publicAuth` work anonymously and
+        also personalize results when a `customerAuth` token is supplied.
+
+  # ---------- Common parameters ----------
+  parameters:
+    RestaurantIdPath:
+      name: restaurantId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+      description: Tenant restaurant id. Must equal the staff token's `restaurantId` claim.
+    ReservationIdPath:
+      name: reservationId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    OrderIdPath:
+      name: orderId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    ItemIdPath:
+      name: itemId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    BatchIdPath:
+      name: batchId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    TableIdPath:
+      name: tableId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    FloorIdPath:
+      name: floorId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    PhoneIdPath:
+      name: phoneId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    CardIdPath:
+      name: cardId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    StaffIdPath:
+      name: staffId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    PendingRequestIdPath:
+      name: requestId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    CategoryIdPath:
+      name: categoryId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    SubcategoryIdPath:
+      name: subcategoryId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    ModifierIdPath:
+      name: modifierId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    MethodIdPath:
+      name: methodId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    DeviceIdPath:
+      name: deviceId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    SavedItemIdPath:
+      name: savedItemId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    FriendIdPath:
+      name: friendId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    ConversationIdPath:
+      name: conversationId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    PaymentIdPath:
+      name: paymentId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    InviteIdPath:
+      name: inviteId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    InviteTokenPath:
+      name: inviteToken
+      in: path
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    TopUpIdPath:
+      name: topUpId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    PoolPath:
+      name: pool
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [domestic, foreign, bonus]
+    CatalogPath:
+      name: catalog
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - security_questions
+          - subscription_plans
+          - reward_tiers
+          - amenities
+          - reservation_preferences
+          - support_articles
+          - occasions
+          - feature_flags
+    FriendRequestIdPath:
+      name: requestId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+
+    # Pagination
+    PageQuery:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSizeQuery:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorQuery:
+      name: cursor
+      in: query
+      schema: { type: string, minLength: 1 }
+      description: Opaque cursor returned by a previous response's `nextCursor`.
+    LimitQuery:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+    # Common date filters
+    FromDateQuery:
+      name: from
+      in: query
+      schema: { type: string, format: date-time }
+    ToDateQuery:
+      name: to
+      in: query
+      schema: { type: string, format: date-time }
+
+    # Idempotency
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 8, maxLength: 128 }
+      description: |
+        Client-generated key for safely retrying mutations. Replays return the
+        original response with `Idempotency-Replay: true`. Keys live 24h.
+
+    # Tenant/locale helpers
+    AcceptLanguageHeader:
+      name: Accept-Language
+      in: header
+      required: false
+      schema: { type: string }
+
+  # ---------- Common headers ----------
+  headers:
+    XRequestId:
+      description: Echoed request id used in logs and the `traceId` field of errors.
+      schema: { type: string }
+    RetryAfter:
+      description: Seconds the client should wait before retrying.
+      schema: { type: integer, minimum: 1 }
+    XRateLimitLimit:
+      description: Maximum number of requests in the current window.
+      schema: { type: integer, minimum: 0 }
+    XRateLimitRemaining:
+      description: Requests remaining in the current window.
+      schema: { type: integer, minimum: 0 }
+    XRateLimitReset:
+      description: Unix epoch seconds when the rate-limit window resets.
+      schema: { type: integer, minimum: 0 }
+    IdempotencyReplay:
+      description: '`true` if the response was replayed from the idempotency cache.'
+      schema: { type: boolean }
+    Location:
+      description: Resource URL for newly created entities.
+      schema: { type: string, format: uri-reference }
+
+  # ---------- Common responses ----------
+  responses:
+    BadRequest:
+      description: Malformed request — bad JSON, wrong types, missing required fields outside business validation.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            malformed:
+              value:
+                type: 'https://errors.catchtable.example/bad_request'
+                title: Bad request
+                status: 400
+                code: bad_request
+                detail: Request body is not valid JSON.
+                traceId: 01HK3NQ7K0F8Q9MZGE6VYYJ4G2
+    Unauthenticated:
+      description: Missing, expired, or invalid bearer token.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          description: Always `Bearer realm="catchtable"`.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            expired:
+              value:
+                type: 'https://errors.catchtable.example/unauthenticated'
+                title: Token expired
+                status: 401
+                code: token_expired
+                detail: 'Access token expired at 2026-04-25T10:00:00Z. Use /auth/refresh.'
+    Forbidden:
+      description: Token is valid but lacks scope, role, permission, or tenant access.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            wrongTenant:
+              value:
+                type: 'https://errors.catchtable.example/forbidden'
+                title: Forbidden
+                status: 403
+                code: tenant_mismatch
+                detail: Token scoped to a different restaurant.
+            missingPermission:
+              value:
+                type: 'https://errors.catchtable.example/forbidden'
+                title: Forbidden
+                status: 403
+                code: missing_permission
+                detail: 'Requires permission `orders.refund`.'
+    NotFound:
+      description: Resource not found, soft-deleted, or hidden by tenant scope.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: |
+        Operation conflicts with current state — e.g. invalid state transition,
+        seat already taken, idempotency key reused with different payload.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            invalidTransition:
+              value:
+                type: 'https://errors.catchtable.example/conflict'
+                title: Invalid state transition
+                status: 409
+                code: invalid_transition
+                detail: 'Reservation is `cancelled`, cannot check in.'
+            idempotency:
+              value:
+                type: 'https://errors.catchtable.example/conflict'
+                title: Idempotency key reused
+                status: 409
+                code: idempotency_key_conflict
+                detail: 'Key was used for a different request body.'
+    UnprocessableEntity:
+      description: Validation errors. The body lists every offending field.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - { $ref: '#/components/schemas/Problem' }
+              - type: object
+                properties:
+                  errors:
+                    type: array
+                    items: { $ref: '#/components/schemas/FieldError' }
+          examples:
+            partySize:
+              value:
+                type: 'https://errors.catchtable.example/validation_failed'
+                title: Validation failed
+                status: 422
+                code: validation_failed
+                detail: One or more fields are invalid.
+                errors:
+                  - { field: partySize, rule: range,    message: 'must be between 1 and 20' }
+                  - { field: date,      rule: required, message: 'is required' }
+    TooManyRequests:
+      description: Rate-limited. Includes `Retry-After` and rate-limit headers.
+      headers:
+        Retry-After:           { $ref: '#/components/headers/RetryAfter' }
+        X-RateLimit-Limit:     { $ref: '#/components/headers/XRateLimitLimit' }
+        X-RateLimit-Remaining: { $ref: '#/components/headers/XRateLimitRemaining' }
+        X-RateLimit-Reset:     { $ref: '#/components/headers/XRateLimitReset' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          examples:
+            tooMany:
+              value: { type: 'https://errors.catchtable.example/too_many_requests', title: Too Many Requests, status: 429, code: too_many_requests }
+    InternalServerError:
+      description: Unexpected server error. Includes a `traceId` to share with support.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NoContent:
+      description: Operation succeeded; no response body.
+
+  # ---------- Common schemas (errors, money, pagination, primitives) ----------
+  schemas:
+    ObjectId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      example: 65f0000000000000000c0001
+
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          description: Decimal string preserving `Decimal128` precision (e.g. "60000", "32.00").
+          pattern: '^-?[0-9]+(\.[0-9]+)?$'
+          example: "60000"
+        currency:
+          type: string
+          description: ISO-4217 currency code. Common values KRW (zero minor units) and USD (two).
+          example: KRW
+          minLength: 3
+          maxLength: 8
+
+    GeoPoint:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type:
+          type: string
+          enum: [Point]
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: number }
+          description: '[lng, lat]'
+          example: [127.0473, 37.5172]
+
+    PageInfo:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page:     { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+        total:    { type: integer, minimum: 0 }
+
+    CursorPage:
+      type: object
+      required: [nextCursor]
+      properties:
+        nextCursor:
+          type: [string, 'null']
+          description: Pass back as `?cursor=` to fetch the next page. `null` when at the end.
+
+    FieldError:
+      type: object
+      required: [field, rule, message]
+      properties:
+        field:   { type: string, example: partySize }
+        rule:
+          type: string
+          example: range
+          description: Validation rule name (`required`, `range`, `format`, `enum`, `unique`, ...).
+        message: { type: string, example: 'must be between 1 and 20' }
+
+    Problem:
+      type: object
+      description: RFC 7807 Problem Details with CatchTable extensions.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the error class.
+          example: 'https://errors.catchtable.example/validation_failed'
+        title:    { type: string, example: 'Validation failed' }
+        status:   { type: integer, minimum: 400, maximum: 599, example: 422 }
+        code:     { $ref: '#/components/schemas/ErrorCode' }
+        detail:   { type: string }
+        instance: { type: string, format: uri-reference, description: 'Path of the failed request.' }
+        traceId:  { type: string, description: 'Echoed in `X-Request-Id` for log correlation.' }
+        errors:
+          type: array
+          description: Per-field validation errors (only present when status=422).
+          items: { $ref: '#/components/schemas/FieldError' }
+        retryAfterSec: { type: integer, minimum: 0, description: 'Equivalent to `Retry-After`.' }
+
+    ErrorCode:
+      type: string
+      description: |
+        Machine-readable error class. New codes may be added as the product evolves.
+      enum:
+        # generic
+        - bad_request
+        - unauthenticated
+        - token_expired
+        - forbidden
+        - not_found
+        - conflict
+        - validation_failed
+        - too_many_requests
+        - internal_error
+        - tenant_mismatch
+        - missing_permission
+        - missing_role
+        - idempotency_key_conflict
+        - feature_disabled
+        # auth/account
+        - username_taken
+        - email_taken
+        - phone_taken
+        - invalid_credentials
+        - account_locked
+        - account_inactive
+        - account_pending_approval
+        - security_answer_invalid
+        - security_answer_attempts_exceeded
+        - reset_token_expired
+        - reset_token_invalid
+        - password_policy_violation
+        - default_password_in_use
+        # discovery
+        - location_required
+        # reservations
+        - draft_required
+        - draft_not_found
+        - draft_step_skipped
+        - draft_expired
+        - deposit_required
+        - currency_mismatch
+        - seat_not_available
+        - party_too_large
+        - party_too_small
+        - too_late_to_cancel
+        - reservation_already_cancelled
+        - invite_expired
+        - invite_already_decided
+        - cannot_invite_self
+        # check-in / qr
+        - qr_invalid
+        - qr_rotated
+        - qr_table_mismatch
+        - qr_outside_grace_window
+        - grace_elapsed
+        # orders
+        - order_not_open
+        - order_already_billed
+        - bill_not_finalized
+        - bill_already_finalized
+        - menu_item_unavailable
+        - menu_item_pool_mismatch
+        - mixed_currency_disallowed
+        - chef_batch_already_accepted
+        - chef_batch_already_completed
+        - cannot_void_after_send
+        - cannot_recall_after_paid
+        # payments
+        - payment_failed
+        - payment_declined
+        - payment_method_required
+        - payment_method_invalid
+        - tendered_too_low
+        - mix_total_mismatch
+        - refund_exceeds_net_amount
+        - refund_already_succeeded
+        - psp_unreachable
+        # wallets
+        - wallet_insufficient_balance
+        - wallet_pool_disabled
+        - bonus_not_giftable
+        - gift_recipient_not_found
+        - gift_self_not_allowed
+        - top_up_amount_below_minimum
+        - top_up_amount_above_maximum
+        # rewards
+        - daily_bonus_already_claimed
+        - daily_bonus_not_available
+        - referral_code_invalid
+        - referral_self_redeem
+        - referral_already_redeemed
+        # subscriptions
+        - subscription_already_active
+        - subscription_past_due
+        - subscription_cannot_downgrade_with_balance
+        - plan_not_found
+        - subscription_plan_unknown
+        - subscription_change_in_flight
+        # generic state machine
+        - invalid_transition
+        # support
+        - conversation_closed
+        - message_too_long
+
+    # ---- Realtime channels (informational) ----
+    RealtimeChannel:
+      type: string
+      description: |
+        WebSocket channel name. Realtime events are out of band — not part of HTTP — but the
+        canonical names live here so other docs can reference them.
+      enum:
+        - reservation.created
+        - reservation.updated
+        - reservation.cancelled
+        - reservation.invite.updated
+        - order.updated
+        - order.item.added
+        - order.item.updated
+        - order.item.voided
+        - order.bill.finalized
+        - order.paid
+        - order.batch.sent
+        - order.batch.accepted
+        - order.batch.completed
+        - table.updated
+        - table.created
+        - table.deleted
+        - payment.captured
+        - payment.voided
+        - payment.refund.requested
+        - payment.refund.succeeded
+        - payment.refund.failed
+        - wallet.transaction.created
+        - user.wallets.updated
+        - points.ledger.created
+        - user.rewards.updated
+        - notification.created
+        - notification.read
+        - notification.deleted
+        - user.notifications.unreadCountChanged
+        - subscription.created
+        - subscription.updated
+        - subscription.invoice.created
+        - subscription.invoice.paid
+        - subscription.invoice.failed
+        - support.conversation.created
+        - support.message.created
+        - support.conversation.updated
+        - restaurant.profile.updated
+        - restaurant.menu.updated
+        - restaurant.settings.updated
+        - restaurant.staff.pending
+        - user.profile.updated
+        - user.friends.updated

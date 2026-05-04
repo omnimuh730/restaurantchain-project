@@ -1,0 +1,43 @@
+sequenceDiagram
+%% Top-up uses the PSP. The `wallet_transactions` row is "draft" until the PSP
+%% webhook commits it; clients can poll GetTopUp or wait for the ws event.
+    autonumber
+    actor U as Customer
+    participant App as Mobile app
+    participant API as API
+    participant Pay as payments
+    participant Ledger as wallet_transactions
+    participant PSP as PSP
+
+    U->>App: pick pool (domestic|foreign) + amount + paymentMethod
+    App->>API: POST /me/wallets/{pool}/top-up<br/>{ amount, paymentMethodId }<br/>Idempotency-Key
+    API->>Pay: insert (purpose=wallet_top_up, status=processing)
+    API->>Ledger: insert DRAFT row (uncommitted)
+    API->>PSP: create paymentIntent
+    API-->>App: 202 { topUpId, intent.clientSecret }
+
+    App->>PSP: confirm via SDK (3DS / Apple Pay / etc.)
+
+    par webhook
+        PSP-->>API: webhook intent.succeeded
+        API->>Pay: status=succeeded
+        API->>Ledger: COMMIT row · update customer_users.wallets cache
+        API-->>App: ws wallet.transaction.created · user.wallets.updated
+    and poll fallback
+        App->>API: GET /me/wallets/top-ups/{topUpId}
+        API-->>App: status=succeeded|processing|failed
+    end
+
+    alt webhook says failed
+        PSP-->>API: webhook intent.payment_failed
+        API->>Pay: status=voided
+        API->>Ledger: drop DRAFT (no balance change)
+        API-->>App: ws — UI shows error
+    else user cancels in time
+        App->>API: POST /me/wallets/top-ups/{topUpId}:cancel
+        alt already settled
+            API-->>App: 409
+        else ok
+            API->>Pay: status=voided · 204
+        end
+    end

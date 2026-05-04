@@ -1,0 +1,280 @@
+openapi: 3.1.0
+info:
+  title: CatchTable Page-Driven API
+  version: 1.0.0
+  summary: HTTP API for the CatchTable POS and reservation app.
+  description: |
+    Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
+    13-collection MongoDB schema in `api-docs/page-driven/schema/`.
+
+    See the `README.md` next to this file for conventions (auth, errors, pagination,
+    idempotency) and how to bundle/preview the multi-file spec.
+  license:
+    name: Proprietary
+  contact:
+    name: CatchTable Engineering
+    email: api@catchtable.example
+
+servers:
+  - url: https://api.catchtable.example/v1
+    description: Production
+  - url: https://api.staging.catchtable.example/v1
+    description: Staging
+  - url: http://localhost:8080/v1
+    description: Local development
+
+tags:
+  # ------ customer-facing ------
+  - name: Auth
+    description: Sign in, sign up, refresh, sign out, password reset (customer + staff).
+  - name: Metadata
+    description: Read-only catalogs (security questions, plans, tiers, amenities, ...).
+  - name: Customer · Profile
+    description: Current customer (`/me`), preferences, security answers, devices, payment methods.
+  - name: Customer · Social
+    description: Saved items, recent searches, friends, daily bonus, referral.
+  - name: Customer · Wallets
+    description: Wallet balances, top-ups, gifts, transactions.
+  - name: Customer · Rewards
+    description: Reward tier, points, points ledger.
+  - name: Customer · Notifications
+    description: In-app notification feed.
+  - name: Customer · Support
+    description: Support conversations and messages.
+  - name: Customer · Subscription
+    description: CatchTable Pro subscription.
+  - name: Discovery
+    description: Discover home, explorer search/map, public restaurant/menu/availability.
+  - name: Reservations
+    description: Reservation lifecycle (customer-side and POS-side share most resources).
+  # ------ POS-facing ------
+  - name: POS · Restaurant
+    description: Restaurant settings, phones, deposit cards, staff, floors, menu.
+  - name: POS · Tables
+    description: Tables CRUD, QR rotation, status flips.
+  - name: POS · Orders
+    description: POS orders, items, send-batches, bills, payments.
+  - name: POS · Kitchen
+    description: Kitchen view (chef batches), accept / complete / recall.
+  - name: POS · Payments
+    description: Payment queries and refunds.
+  - name: POS · Analytics
+    description: Sales dashboard, revenue, menu, customers, history.
+  - name: POS · Subscription
+    description: Restaurant tier subscription.
+
+# Default security: customer JWT. Endpoints override as needed.
+security:
+  - customerAuth: []
+
+# ----------- All paths -----------
+# Each entry refs an operation defined in `paths/*.yaml`.
+paths:
+
+  # ============ Auth ============
+  /auth/customer/sign-up:                  { post: { $ref: './paths/auth.yaml#/x-operations/CustomerSignUp' } }
+  /auth/customer/sign-in:                  { post: { $ref: './paths/auth.yaml#/x-operations/CustomerSignIn' } }
+  /auth/staff/sign-up/restaurant:          { post: { $ref: './paths/auth.yaml#/x-operations/StaffSignUpRestaurant' } }
+  /auth/staff/sign-up/staff:               { post: { $ref: './paths/auth.yaml#/x-operations/StaffSignUpStaff' } }
+  /auth/staff/sign-in:                     { post: { $ref: './paths/auth.yaml#/x-operations/StaffSignIn' } }
+  /auth/sign-out:                          { post: { $ref: './paths/auth.yaml#/x-operations/SignOut' } }
+  /auth/refresh:                           { post: { $ref: './paths/auth.yaml#/x-operations/Refresh' } }
+  /auth/password-reset/start:              { post: { $ref: './paths/auth.yaml#/x-operations/PasswordResetStart' } }
+  /auth/password-reset/verify-question:    { post: { $ref: './paths/auth.yaml#/x-operations/PasswordResetVerifyQuestion' } }
+  /auth/password-reset/complete:           { post: { $ref: './paths/auth.yaml#/x-operations/PasswordResetComplete' } }
+  /auth/username-available:                { get:  { $ref: './paths/auth.yaml#/x-operations/UsernameAvailable' } }
+
+  # ============ Metadata ============
+  /metadata/{catalog}:                     { get:  { $ref: './paths/metadata.yaml#/x-operations/GetCatalog' } }
+
+  # ============ Customer · Profile ============
+  /me:                                     { get: { $ref: './paths/customer-profile.yaml#/x-operations/GetMe' }, patch: { $ref: './paths/customer-profile.yaml#/x-operations/UpdateMe' } }
+  /me/preferences:                         { put:  { $ref: './paths/customer-profile.yaml#/x-operations/PutPreferences' } }
+  /me/security-answers:                    { put:  { $ref: './paths/customer-profile.yaml#/x-operations/PutSecurityAnswers' } }
+  /me/password:                            { put:  { $ref: './paths/customer-profile.yaml#/x-operations/ChangePassword' } }
+  /me/devices:                             { get: { $ref: './paths/customer-profile.yaml#/x-operations/ListDevices' }, post: { $ref: './paths/customer-profile.yaml#/x-operations/RegisterDevice' } }
+  /me/devices/{deviceId}:                  { delete: { $ref: './paths/customer-profile.yaml#/x-operations/DeleteDevice' } }
+  /me/payment-methods:                     { get: { $ref: './paths/customer-profile.yaml#/x-operations/ListPaymentMethods' }, post: { $ref: './paths/customer-profile.yaml#/x-operations/AddPaymentMethod' } }
+  /me/payment-methods/{methodId}:          { patch: { $ref: './paths/customer-profile.yaml#/x-operations/UpdatePaymentMethod' }, delete: { $ref: './paths/customer-profile.yaml#/x-operations/DeletePaymentMethod' } }
+
+  # ============ Customer · Social ============
+  /me/saved-items:                         { get: { $ref: './paths/customer-social.yaml#/x-operations/ListSavedItems' }, post: { $ref: './paths/customer-social.yaml#/x-operations/AddSavedItem' } }
+  /me/saved-items/{savedItemId}:           { delete: { $ref: './paths/customer-social.yaml#/x-operations/DeleteSavedItem' } }
+  /me/recent-searches:                     { get: { $ref: './paths/customer-social.yaml#/x-operations/ListRecentSearches' }, post: { $ref: './paths/customer-social.yaml#/x-operations/PushRecentSearch' }, delete: { $ref: './paths/customer-social.yaml#/x-operations/ClearRecentSearches' } }
+  /me/friends:                             { get:  { $ref: './paths/customer-social.yaml#/x-operations/ListFriends' } }
+  /me/friends/{friendId}:                  { delete: { $ref: './paths/customer-social.yaml#/x-operations/RemoveFriend' } }
+  /me/friend-requests:                     { get: { $ref: './paths/customer-social.yaml#/x-operations/ListFriendRequests' }, post: { $ref: './paths/customer-social.yaml#/x-operations/SendFriendRequest' } }
+  /me/friend-requests/{requestId}:accept:  { post: { $ref: './paths/customer-social.yaml#/x-operations/AcceptFriendRequest' } }
+  /me/friend-requests/{requestId}:decline: { post: { $ref: './paths/customer-social.yaml#/x-operations/DeclineFriendRequest' } }
+  /me/friend-invites/by-phone:             { post: { $ref: './paths/customer-social.yaml#/x-operations/InviteFriendByPhone' } }
+  /me/daily-bonus:                         { get:  { $ref: './paths/customer-social.yaml#/x-operations/GetDailyBonus' } }
+  /me/daily-bonus:claim:                   { post: { $ref: './paths/customer-social.yaml#/x-operations/ClaimDailyBonus' } }
+  /me/referral:                            { get:  { $ref: './paths/customer-social.yaml#/x-operations/GetReferral' } }
+  /me/referral:redeem:                     { post: { $ref: './paths/customer-social.yaml#/x-operations/RedeemReferralCode' } }
+
+  # ============ Customer · Wallets ============
+  /me/wallets:                             { get:  { $ref: './paths/customer-wallets.yaml#/x-operations/GetWallets' } }
+  /me/wallets/transactions:                { get:  { $ref: './paths/customer-wallets.yaml#/x-operations/ListWalletTransactions' } }
+  /me/wallets/{pool}/top-up:               { post: { $ref: './paths/customer-wallets.yaml#/x-operations/StartTopUp' } }
+  /me/wallets/top-ups/{topUpId}:           { get:  { $ref: './paths/customer-wallets.yaml#/x-operations/GetTopUp' } }
+  /me/wallets/top-ups/{topUpId}:cancel:    { post: { $ref: './paths/customer-wallets.yaml#/x-operations/CancelTopUp' } }
+  /me/wallets/{pool}/gift:                 { post: { $ref: './paths/customer-wallets.yaml#/x-operations/SendGift' } }
+
+  # ============ Customer · Rewards ============
+  /me/rewards:                             { get: { $ref: './paths/customer-rewards.yaml#/x-operations/GetRewards' } }
+  /me/rewards/points-ledger:               { get: { $ref: './paths/customer-rewards.yaml#/x-operations/ListPointsLedger' } }
+
+  # ============ Customer · Notifications ============
+  /me/notifications:                       { get: { $ref: './paths/customer-notifications.yaml#/x-operations/ListNotifications' }, delete: { $ref: './paths/customer-notifications.yaml#/x-operations/DeleteAllNotifications' } }
+  /me/notifications:mark-all-read:         { post:   { $ref: './paths/customer-notifications.yaml#/x-operations/MarkAllRead' } }
+  /me/notifications/{notificationId}:      { delete: { $ref: './paths/customer-notifications.yaml#/x-operations/DeleteNotification' } }
+  /me/notifications/{notificationId}:read: { post:   { $ref: './paths/customer-notifications.yaml#/x-operations/MarkOneRead' } }
+
+  # ============ Customer · Support ============
+  /me/support/conversations:                                  { get: { $ref: './paths/customer-support.yaml#/x-operations/ListConversations' }, post: { $ref: './paths/customer-support.yaml#/x-operations/OpenConversation' } }
+  /me/support/conversations/{conversationId}:                 { get: { $ref: './paths/customer-support.yaml#/x-operations/GetConversation' } }
+  /me/support/conversations/{conversationId}/messages:        { post: { $ref: './paths/customer-support.yaml#/x-operations/PostMessage' } }
+  /me/support/conversations/{conversationId}:mark-read:       { post: { $ref: './paths/customer-support.yaml#/x-operations/MarkConversationRead' } }
+  /me/support/conversations/{conversationId}:rate:            { post: { $ref: './paths/customer-support.yaml#/x-operations/RateConversation' } }
+
+  # ============ Customer · Subscription ============
+  /me/subscription:                                     { get: { $ref: './paths/customer-subscriptions.yaml#/x-operations/GetMySubscription' }, post: { $ref: './paths/customer-subscriptions.yaml#/x-operations/StartProSubscription' } }
+  /me/subscription:cancel:                              { post: { $ref: './paths/customer-subscriptions.yaml#/x-operations/CancelMySubscription' } }
+  /me/subscription:reactivate:                          { post: { $ref: './paths/customer-subscriptions.yaml#/x-operations/ReactivateMySubscription' } }
+  /me/subscription:change-plan:                         { post: { $ref: './paths/customer-subscriptions.yaml#/x-operations/ChangePlan' } }
+  /me/subscription:change-payment-method:               { post: { $ref: './paths/customer-subscriptions.yaml#/x-operations/ChangePaymentMethod' } }
+
+  # ============ Discovery ============
+  /discover:                               { get: { $ref: './paths/discovery.yaml#/x-operations/GetDiscoverHome' } }
+  /restaurants:                            { get: { $ref: './paths/discovery.yaml#/x-operations/SearchRestaurants' } }
+  /restaurants/suggestions:                { get: { $ref: './paths/discovery.yaml#/x-operations/GetSuggestions' } }
+  /restaurants/{restaurantId}:             { get: { $ref: './paths/discovery.yaml#/x-operations/GetPublicRestaurant' } }
+  /restaurants/{restaurantId}/menu:        { get: { $ref: './paths/discovery.yaml#/x-operations/GetPublicMenu' } }
+  /restaurants/{restaurantId}/availability: { get: { $ref: './paths/discovery.yaml#/x-operations/GetAvailability' } }
+
+  # ============ Reservations ============
+  /me/reservations:                                       { get: { $ref: './paths/reservations.yaml#/x-operations/ListMyReservations' } }
+  /me/active-draft:                                       { get: { $ref: './paths/reservations.yaml#/x-operations/GetActiveDraft' }, put: { $ref: './paths/reservations.yaml#/x-operations/PutActiveDraft' }, delete: { $ref: './paths/reservations.yaml#/x-operations/DeleteActiveDraft' } }
+  /reservations:                                          { post: { $ref: './paths/reservations.yaml#/x-operations/CreateReservation' } }
+  /reservations/{reservationId}:                          { get:  { $ref: './paths/reservations.yaml#/x-operations/GetReservation' } }
+  /reservations/{reservationId}:cancel:                   { post: { $ref: './paths/reservations.yaml#/x-operations/CancelReservation' } }
+  /reservations/{reservationId}:rate:                     { post: { $ref: './paths/reservations.yaml#/x-operations/RateReservation' } }
+  /reservations/{reservationId}/invites:                  { get:  { $ref: './paths/reservations.yaml#/x-operations/ListInvites' }, post: { $ref: './paths/reservations.yaml#/x-operations/CreateInvite' } }
+  /reservations/{reservationId}/invites/{inviteId}:       { delete: { $ref: './paths/reservations.yaml#/x-operations/CancelInvite' } }
+  /reservations/invites/{inviteToken}:accept:             { post: { $ref: './paths/reservations.yaml#/x-operations/AcceptInvite' } }
+  /reservations/invites/{inviteToken}:decline:            { post: { $ref: './paths/reservations.yaml#/x-operations/DeclineInvite' } }
+  /reservations/{reservationId}:check-in-by-qr:           { post: { $ref: './paths/reservations.yaml#/x-operations/CheckInByQr' } }
+  # POS-side
+  /pos/restaurants/{restaurantId}/reservations:           { get:  { $ref: './paths/reservations.yaml#/x-operations/PosListReservations' } }
+  /pos/reservations/{reservationId}:approve:              { post: { $ref: './paths/reservations.yaml#/x-operations/PosApprove' } }
+  /pos/reservations/{reservationId}:decline:              { post: { $ref: './paths/reservations.yaml#/x-operations/PosDecline' } }
+  /pos/reservations/{reservationId}:check-in:             { post: { $ref: './paths/reservations.yaml#/x-operations/PosCheckIn' } }
+  /pos/reservations/{reservationId}:no-show:              { post: { $ref: './paths/reservations.yaml#/x-operations/PosNoShow' } }
+  /pos/reservations/{reservationId}:cancel:               { post: { $ref: './paths/reservations.yaml#/x-operations/PosCancel' } }
+
+  # ============ POS · Restaurant ============
+  /pos/restaurants/{restaurantId}:                        { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/GetRestaurant' }, patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateRestaurant' } }
+  /pos/restaurants/{restaurantId}/settings:               { put: { $ref: './paths/pos-restaurant.yaml#/x-operations/PutSettings' } }
+  /pos/restaurants/{restaurantId}/phones:                 { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/ListPhones' }, post: { $ref: './paths/pos-restaurant.yaml#/x-operations/AddPhone' } }
+  /pos/restaurants/{restaurantId}/phones/{phoneId}:       { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdatePhone' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeletePhone' } }
+  /pos/restaurants/{restaurantId}/phones/{phoneId}:set-primary: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/SetPrimaryPhone' } }
+  /pos/restaurants/{restaurantId}/deposit-cards:          { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/ListDepositCards' }, post: { $ref: './paths/pos-restaurant.yaml#/x-operations/AddDepositCard' } }
+  /pos/restaurants/{restaurantId}/deposit-cards/{cardId}: { delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteDepositCard' } }
+  /pos/restaurants/{restaurantId}/deposit-cards/{cardId}:set-default: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/SetDefaultDepositCard' } }
+  /pos/restaurants/{restaurantId}/staff:                  { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/ListStaff' } }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:        { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateStaff' } }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:inactivate: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/InactivateStaff' } }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:activate:   { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/ActivateStaff' } }
+  /pos/restaurants/{restaurantId}/staff/pending:          { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/ListPendingStaff' } }
+  /pos/restaurants/{restaurantId}/staff/pending/{requestId}:approve: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/ApprovePendingStaff' } }
+  /pos/restaurants/{restaurantId}/staff/pending/{requestId}:reject:  { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/RejectPendingStaff' } }
+  /pos/restaurants/{restaurantId}/floors:                 { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/ListFloors' }, post: { $ref: './paths/pos-restaurant.yaml#/x-operations/CreateFloor' } }
+  /pos/restaurants/{restaurantId}/floors/{floorId}:       { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateFloor' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteFloor' } }
+  /pos/restaurants/{restaurantId}/menu:                   { get: { $ref: './paths/pos-restaurant.yaml#/x-operations/GetMenu' } }
+  /pos/restaurants/{restaurantId}/menu/categories:        { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/CreateCategory' } }
+  /pos/restaurants/{restaurantId}/menu/categories/{categoryId}: { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateCategory' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteCategory' } }
+  /pos/restaurants/{restaurantId}/menu/categories/{categoryId}/subcategories: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/CreateSubcategory' } }
+  /pos/restaurants/{restaurantId}/menu/subcategories/{subcategoryId}: { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateSubcategory' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteSubcategory' } }
+  /pos/restaurants/{restaurantId}/menu/items:             { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/CreateMenuItem' } }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}:    { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateMenuItem' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteMenuItem' } }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/availability: { put: { $ref: './paths/pos-restaurant.yaml#/x-operations/PutMenuItemAvailability' } }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/modifiers: { post: { $ref: './paths/pos-restaurant.yaml#/x-operations/CreateMenuModifier' } }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/modifiers/{modifierId}: { patch: { $ref: './paths/pos-restaurant.yaml#/x-operations/UpdateMenuModifier' }, delete: { $ref: './paths/pos-restaurant.yaml#/x-operations/DeleteMenuModifier' } }
+
+  # ============ POS · Tables ============
+  /pos/restaurants/{restaurantId}/floors/{floorId}/tables: { get: { $ref: './paths/pos-tables.yaml#/x-operations/ListTables' }, post: { $ref: './paths/pos-tables.yaml#/x-operations/CreateTable' }, put: { $ref: './paths/pos-tables.yaml#/x-operations/ReplaceFloorTables' } }
+  /pos/restaurants/{restaurantId}/tables/{tableId}:       { get: { $ref: './paths/pos-tables.yaml#/x-operations/GetTable' }, patch: { $ref: './paths/pos-tables.yaml#/x-operations/UpdateTable' }, delete: { $ref: './paths/pos-tables.yaml#/x-operations/DeleteTable' } }
+  /pos/restaurants/{restaurantId}/tables/{tableId}/status: { put: { $ref: './paths/pos-tables.yaml#/x-operations/SetTableStatus' } }
+  /pos/restaurants/{restaurantId}/tables/{tableId}/qr-code:rotate: { post: { $ref: './paths/pos-tables.yaml#/x-operations/RotateQrCode' } }
+
+  # ============ POS · Orders ============
+  /pos/restaurants/{restaurantId}/orders:                 { get: { $ref: './paths/pos-orders.yaml#/x-operations/ListOrders' }, post: { $ref: './paths/pos-orders.yaml#/x-operations/OpenOrder' } }
+  /pos/orders/{orderId}:                                  { get: { $ref: './paths/pos-orders.yaml#/x-operations/GetOrder' } }
+  /pos/orders/{orderId}/items:                            { post: { $ref: './paths/pos-orders.yaml#/x-operations/AddDraftItem' } }
+  /pos/orders/{orderId}/items/{itemId}:                   { patch: { $ref: './paths/pos-orders.yaml#/x-operations/UpdateOrderItem' }, delete: { $ref: './paths/pos-orders.yaml#/x-operations/DeleteDraftItem' } }
+  /pos/orders/{orderId}/items/{itemId}:void:              { post: { $ref: './paths/pos-orders.yaml#/x-operations/VoidOrderItem' } }
+  /pos/orders/{orderId}:send-batch:                       { post: { $ref: './paths/pos-orders.yaml#/x-operations/SendBatch' } }
+  /pos/orders/{orderId}:request-bill:                     { post: { $ref: './paths/pos-orders.yaml#/x-operations/RequestBill' } }
+  /pos/orders/{orderId}:finalize-bill:                    { post: { $ref: './paths/pos-orders.yaml#/x-operations/FinalizeBill' } }
+  /pos/orders/{orderId}:void:                             { post: { $ref: './paths/pos-orders.yaml#/x-operations/VoidOrder' } }
+  /pos/orders/{orderId}/payments:                         { post: { $ref: './paths/pos-orders.yaml#/x-operations/PayOrder' } }
+
+  # ============ POS · Kitchen ============
+  /pos/restaurants/{restaurantId}/kitchen/batches:        { get: { $ref: './paths/pos-kitchen.yaml#/x-operations/ListBatches' } }
+  /pos/orders/{orderId}/batches/{batchId}:accept:         { post: { $ref: './paths/pos-kitchen.yaml#/x-operations/AcceptBatch' } }
+  /pos/orders/{orderId}/items/{itemId}:complete:          { post: { $ref: './paths/pos-kitchen.yaml#/x-operations/CompleteItem' } }
+  /pos/orders/{orderId}/items/{itemId}:recall:            { post: { $ref: './paths/pos-kitchen.yaml#/x-operations/RecallItem' } }
+
+  # ============ POS · Payments ============
+  /pos/restaurants/{restaurantId}/payments:               { get: { $ref: './paths/pos-payments.yaml#/x-operations/ListPayments' } }
+  /pos/payments/{paymentId}:                              { get: { $ref: './paths/pos-payments.yaml#/x-operations/GetPayment' } }
+  /pos/payments/{paymentId}/refunds:                      { post: { $ref: './paths/pos-payments.yaml#/x-operations/CreateRefund' } }
+
+  # ============ POS · Analytics ============
+  /pos/restaurants/{restaurantId}/analytics/sales-dashboard: { get: { $ref: './paths/pos-analytics.yaml#/x-operations/GetSalesDashboard' } }
+  /pos/restaurants/{restaurantId}/analytics/revenue:         { get: { $ref: './paths/pos-analytics.yaml#/x-operations/GetRevenueAnalysis' } }
+  /pos/restaurants/{restaurantId}/analytics/menu:            { get: { $ref: './paths/pos-analytics.yaml#/x-operations/GetMenuAnalysis' } }
+  /pos/restaurants/{restaurantId}/analytics/customers:       { get: { $ref: './paths/pos-analytics.yaml#/x-operations/GetCustomerAnalysis' } }
+  /pos/restaurants/{restaurantId}/analytics/history:         { get: { $ref: './paths/pos-analytics.yaml#/x-operations/GetHistory' } }
+
+  # ============ POS · Subscription ============
+  /pos/restaurants/{restaurantId}/subscription:                  { get: { $ref: './paths/pos-subscriptions.yaml#/x-operations/GetRestaurantSubscription' } }
+  /pos/restaurants/{restaurantId}/subscription:change-plan:      { post: { $ref: './paths/pos-subscriptions.yaml#/x-operations/ChangeRestaurantPlan' } }
+  /pos/restaurants/{restaurantId}/subscription:cancel:           { post: { $ref: './paths/pos-subscriptions.yaml#/x-operations/CancelRestaurantSubscription' } }
+  /pos/restaurants/{restaurantId}/subscription:reactivate:       { post: { $ref: './paths/pos-subscriptions.yaml#/x-operations/ReactivateRestaurantSubscription' } }
+  /pos/restaurants/{restaurantId}/subscription/invoices:         { get:  { $ref: './paths/pos-subscriptions.yaml#/x-operations/ListRestaurantInvoices' } }
+
+# Security schemes are inlined here (instead of $ref'd from common.yaml) so that
+# in-editor previewers like VS Code's Swagger Preview — which do not follow
+# cross-file $refs — still render the Authorize button correctly.
+#
+# Everything else (parameters, headers, error responses, schemas) lives in
+# `components/common.yaml` and `components/schemas.yaml` and is referenced via
+# $ref from the path files. To preview without a bundler, use Redocly Preview
+# (see README.md) or open the bundled artifact `openapi.bundled.yaml`.
+components:
+  securitySchemes:
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer JWT issued by `/auth/customer/sign-in` or `/auth/refresh`.
+        Required claims: `sub` (customer userId), `subjectKind="customer"`, `exp`.
+    staffAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer JWT issued by `/auth/staff/sign-in` or `/auth/refresh`.
+        Required claims: `sub` (staff userId), `subjectKind="staff"`, `restaurantId`,
+        `role` (`manager`/`waiter`/`chef`/`cashier`), `permissions[]`, `exp`.
+        POS endpoints under `/pos/restaurants/{restaurantId}/...` enforce that the
+        token's `restaurantId` claim equals the path parameter.
+    publicAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Optional bearer token. Endpoints accepting `publicAuth` work anonymously and
+        also personalize results when a `customerAuth` token is supplied.

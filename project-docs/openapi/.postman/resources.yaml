@@ -1,0 +1,28 @@
+# Use this workspace to collaborate
+workspace:
+  id: ""
+
+localResources:
+  specs:
+    - ..\openapi.bundled.yaml
+    - ..\openapi.yaml
+    - ..\components\common.yaml
+    - ..\components\schemas.yaml
+    - ..\paths\auth.yaml
+    - ..\paths\customer-notifications.yaml
+    - ..\paths\customer-profile.yaml
+    - ..\paths\customer-rewards.yaml
+    - ..\paths\customer-social.yaml
+    - ..\paths\customer-subscriptions.yaml
+    - ..\paths\customer-support.yaml
+    - ..\paths\customer-wallets.yaml
+    - ..\paths\discovery.yaml
+    - ..\paths\metadata.yaml
+    - ..\paths\pos-analytics.yaml
+    - ..\paths\pos-kitchen.yaml
+    - ..\paths\pos-orders.yaml
+    - ..\paths\pos-payments.yaml
+    - ..\paths\pos-restaurant.yaml
+    - ..\paths\pos-subscriptions.yaml
+    - ..\paths\pos-tables.yaml
+    - ..\paths\reservations.yaml

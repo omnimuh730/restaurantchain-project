@@ -1,0 +1,24 @@
+flowchart TD
+%% End-to-end customer booking journey. Source: reservation/Discover, Explorer,
+%% Reservation Flow READMEs + paths/discovery.yaml + paths/reservations.yaml.
+    Home["Discover home<br/>GET /discover"] -->|"tap card"| Detail["Restaurant page<br/>GET /restaurants/{id}<br/>GET /restaurants/{id}/menu"]
+    Map["Explorer map<br/>GET /restaurants?bbox=..."] --> Detail
+    Search["Search<br/>GET /restaurants?q=..."] --> Detail
+    Saved["Saved (heart)<br/>GET /me/saved-items"] --> Detail
+    Dining["Dining → Book Again<br/>GET /me/reservations"] --> Detail
+
+    Detail -->|"Reserve"| W1["Wizard Step 1<br/>guests · date · time<br/>GET /availability"]
+    W1 --> W2["Step 2<br/>contact · occasion · requests"]
+    W2 --> W3["Step 3<br/>preferences"]
+    W3 --> W4["Step 4<br/>review · upfront pay"]
+
+    W1 -. "PUT /me/active-draft" .-> Draft[("active draft<br/>TTL")]
+    W2 -. "PUT /me/active-draft" .-> Draft
+    W3 -. "PUT /me/active-draft" .-> Draft
+
+    W4 -->|"POST /reservations<br/>(idempotent)"| Confirm{"Validate +<br/>charge deposit"}
+    Confirm -- "seat_not_available" --> W1
+    Confirm -- "deposit_required" --> W4
+    Confirm -- "payment_failed / declined" --> W4
+    Confirm -- "ok" --> Done["status=requested<br/>navigate to Dining → Reservation"]
+    Done -. "ws reservation.created" .-> POSStaff[POS dashboard]

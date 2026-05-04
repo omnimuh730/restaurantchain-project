@@ -1,0 +1,30 @@
+sequenceDiagram
+%% Daily bonus = once-per-local-day, three-box reveal. Referral = once per
+%% redeemer, capped per code; both award via wallet + points ledgers.
+    autonumber
+    actor U as Customer
+    participant API
+    participant Cu as customer_users
+    participant LW as wallet_transactions
+    participant LP as points_ledger
+
+    U->>API: GET /me/daily-bonus
+    API-->>U: { available, lastClaimedDate, history[] }
+
+    alt already claimed today
+        API-->>U: 409 daily_bonus_already_claimed
+    else available
+        U->>API: POST /me/daily-bonus:claim (selectedBox 0/1/2, Idempotency-Key)
+        API->>API: roll reward (points or bonus_credit or coupon)
+        opt reward.kind is points
+            API->>LP: insert (reason=daily_bonus, direction=credit)
+        end
+        opt reward.kind is bonus_credit
+            API->>LW: insert (pool=bonus, type=daily_bonus)
+        end
+        API->>Cu: append dailyBonus.history and update lastClaimedDate
+        API-->>U: 200 with reward and balances
+        API-->>U: ws user.wallets.updated and user.rewards.updated
+    end
+
+    Note over U,API: Referral redemption mirrors this. POST /me/referral:redeem with code rewards both redeemer and referrer. Errors include referral_already_redeemed and referral_self_redeem.

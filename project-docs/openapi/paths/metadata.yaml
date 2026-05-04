@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Metadata'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `metadata` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/metadata.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /metadata/{catalog}:
+    get: { $ref: '#/x-operations/GetCatalog' }
+
+x-operations:
+  # Metadata catalog endpoints. The single `metadata` collection holds many catalogs
+  # keyed by `_id`; this surface returns one catalog at a time.
+
+  GetCatalog:
+    tags: [Metadata]
+    operationId: getMetadataCatalog
+    summary: Read a static catalog by id.
+    description: |
+      Returns one catalog (e.g. `security_questions`, `subscription_plans`, `reward_tiers`,
+      `amenities`, `reservation_preferences`, `support_articles`, `occasions`,
+      `feature_flags`).
+
+      Supports `If-None-Match` for cheap polling.  Versioned by the catalog's `version`
+      field, returned as the strong ETag.
+    security:
+      - publicAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/CatalogPath'
+      - $ref: '../components/common.yaml#/components/parameters/AcceptLanguageHeader'
+      - name: If-None-Match
+        in: header
+        schema: { type: string }
+    responses:
+      '200':
+        description: Catalog document.
+        headers:
+          ETag:
+            description: 'Strong ETag of the catalog (`"v123"`).'
+            schema: { type: string }
+          Cache-Control:
+            schema: { type: string }
+            description: 'Always `public, max-age=300, stale-while-revalidate=86400`.'
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MetadataDoc' }
+            examples:
+              securityQuestions:
+                value:
+                  id: security_questions
+                  version: 3
+                  items:
+                    - { code: first_pet_name,  prompt: "What was your first pet's name?" }
+                    - { code: city_of_birth,   prompt: 'In what city were you born?' }
+                    - { code: favorite_dish,   prompt: 'What is your favorite dish?' }
+                  updatedAt: '2026-04-01T00:00:00.000Z'
+              subscriptionPlans:
+                value:
+                  id: subscription_plans
+                  version: 7
+                  items:
+                    - product: catchtable_pro
+                      code: pro_monthly
+                      price: { amount: '6.99',   currency: USD }
+                      interval: month
+                    - product: restaurant_tier
+                      code: pro_monthly
+                      tier: pro
+                      price: { amount: '99000', currency: KRW }
+                      interval: month
+                      perks: [unlimited_qr, advanced_analytics, priority_support]
+      '304':
+        description: Not modified — client cache is up to date.
+      '404':
+        description: Unknown catalog id.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }

@@ -1,0 +1,13 @@
+flowchart LR
+%% Two pagination conventions live side by side. Cursor-based is preferred for
+%% high-cardinality logs (notifications, transactions, history); offset-based
+%% is fine for bounded admin lists (staff, deposit cards).
+    subgraph Offset["Offset · admin lists"]
+        O1["GET ...?page=1&pageSize=20"] --> O2["{ items, page, pageSize, total }"]
+        O2 -->|"page = page+1<br/>while items*page < total"| O1
+    end
+    subgraph Cursor["Cursor · ledgers + feeds"]
+        C1["GET ...?limit=50"] --> C2["{ items, nextCursor }"]
+        C2 -->|"if nextCursor != null<br/>?cursor=<opaque>"| C3["GET ...?limit=50&cursor=..."]
+        C3 --> C2
+    end

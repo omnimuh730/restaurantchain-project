@@ -1,0 +1,197 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Subscriptions'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-subscriptions` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-subscriptions.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me/subscription:
+    get: { $ref: '#/x-operations/GetMySubscription' }
+    post: { $ref: '#/x-operations/StartProSubscription' }
+  /me/subscription:cancel:
+    post: { $ref: '#/x-operations/CancelMySubscription' }
+  /me/subscription:change-payment-method:
+    post: { $ref: '#/x-operations/ChangePaymentMethod' }
+  /me/subscription:change-plan:
+    post: { $ref: '#/x-operations/ChangePlan' }
+  /me/subscription:reactivate:
+    post: { $ref: '#/x-operations/ReactivateMySubscription' }
+
+x-operations:
+  # CatchTable Pro subscription (customer side).
+
+  GetMySubscription:
+    tags: [Customer · Subscription]
+    operationId: getMySubscription
+    summary: Read the customer's current subscription (or null if none).
+    responses:
+      '200':
+        description: Subscription details (full document with embedded invoices).
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../components/schemas.yaml#/components/schemas/Subscription'
+                - type: 'null'
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  StartProSubscription:
+    tags: [Customer · Subscription]
+    operationId: startProSubscription
+    summary: Start a CatchTable Pro subscription.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [planCode, paymentMethodId]
+            properties:
+              planCode:        { type: string, enum: [pro_monthly, pro_quarterly, pro_yearly] }
+              paymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              promoCode:       { type: string }
+    responses:
+      '201':
+        description: Subscription created. First invoice may be `paid` (no trial) or `open` (trial).
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subscription]
+              properties:
+                subscription: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+                intent:
+                  description: 'Returned only when first invoice requires client SDK confirmation (e.g. 3DS).'
+                  oneOf:
+                    - $ref: '../components/schemas.yaml#/components/schemas/PaymentIntentResponse'
+                    - { type: 'null' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Plan or payment method not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: User already has an active subscription.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already subscribed, status: 409, code: subscription_already_active }
+      '422':
+        description: First charge failed.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              payment:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Payment failed, status: 422, code: payment_failed }
+
+  CancelMySubscription:
+    tags: [Customer · Subscription]
+    operationId: cancelMySubscription
+    summary: Schedule cancellation at the end of the current period.
+    description: |
+      Sets `cancelAtPeriodEnd=true`. The user retains Pro perks until `currentPeriodEnd`.
+      Idempotent — repeated calls return the same subscription.
+    responses:
+      '200':
+        description: Updated subscription.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Subscription already cancelled or expired.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ReactivateMySubscription:
+    tags: [Customer · Subscription]
+    operationId: reactivateMySubscription
+    summary: Undo a scheduled cancellation while the period is still active.
+    responses:
+      '200':
+        description: Updated subscription.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Period already ended.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ChangePlan:
+    tags: [Customer · Subscription]
+    operationId: changeSubscriptionPlan
+    summary: Switch between monthly/quarterly/yearly Pro plans.
+    description: |
+      Upgrades take effect immediately with prorated invoice. Downgrades schedule the
+      change for the next period boundary.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [planCode]
+            properties:
+              planCode: { type: string, enum: [pro_monthly, pro_quarterly, pro_yearly] }
+    responses:
+      '200':
+        description: Updated subscription.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Plan not changeable now (e.g. past_due).
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ChangePaymentMethod:
+    tags: [Customer · Subscription]
+    operationId: changeSubscriptionPaymentMethod
+    summary: Replace the card funding the subscription.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [paymentMethodId]
+            properties:
+              paymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Updated subscription.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Subscription or payment method not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }

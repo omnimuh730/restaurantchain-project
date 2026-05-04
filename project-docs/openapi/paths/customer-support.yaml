@@ -1,0 +1,209 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Support'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-support` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-support.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me/support/conversations:
+    get: { $ref: '#/x-operations/ListConversations' }
+    post: { $ref: '#/x-operations/OpenConversation' }
+  /me/support/conversations/{conversationId}:
+    get: { $ref: '#/x-operations/GetConversation' }
+  /me/support/conversations/{conversationId}:mark-read:
+    post: { $ref: '#/x-operations/MarkConversationRead' }
+  /me/support/conversations/{conversationId}:rate:
+    post: { $ref: '#/x-operations/RateConversation' }
+  /me/support/conversations/{conversationId}/messages:
+    post: { $ref: '#/x-operations/PostMessage' }
+
+x-operations:
+  # Support conversations and messages.
+
+  ListConversations:
+    tags: [Customer · Support]
+    operationId: listSupportConversations
+    summary: List the customer's support conversations.
+    parameters:
+      - name: status
+        in: query
+        schema: { type: string, enum: [open, pending_user, pending_agent, resolved, closed, all], default: all }
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Conversations.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items:
+                        allOf:
+                          - $ref: '../components/schemas.yaml#/components/schemas/SupportConversation'
+                          - type: object
+                            description: 'List view: messages omitted; only metadata + lastMessagePreview returned.'
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  OpenConversation:
+    tags: [Customer · Support]
+    operationId: openSupportConversation
+    summary: Open a new support conversation.
+    description: |
+      Optional context links the conversation to a reservation, order, payment, or
+      a `support_articles` slug from the metadata catalog.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [topic, body]
+            properties:
+              topic:    { type: string, enum: [reservation, payment, account, refund, technical, other] }
+              subject:  { type: string, maxLength: 200 }
+              body:     { type: string, minLength: 1, maxLength: 8000 }
+              context:
+                type: object
+                properties:
+                  reservationId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  orderId:       { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  paymentId:     { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  articleSlug:   { type: string }
+              attachments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    url:      { type: string, format: uri-reference }
+                    mime:     { type: string }
+                    size:     { type: integer, minimum: 0, maximum: 10485760 }
+                    filename: { type: string }
+    responses:
+      '201':
+        description: Conversation opened.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/SupportConversation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  GetConversation:
+    tags: [Customer · Support]
+    operationId: getSupportConversation
+    summary: Read full conversation including messages.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ConversationIdPath'
+    responses:
+      '200':
+        description: Conversation.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/SupportConversation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  PostMessage:
+    tags: [Customer · Support]
+    operationId: postSupportMessage
+    summary: Send a message in an open conversation.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ConversationIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [body]
+            properties:
+              body: { type: string, minLength: 1, maxLength: 8000 }
+              attachments:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    url:      { type: string, format: uri-reference }
+                    mime:     { type: string }
+                    size:     { type: integer, minimum: 0, maximum: 10485760 }
+                    filename: { type: string }
+    responses:
+      '201':
+        description: Message appended.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/SupportMessage' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Conversation closed.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              closed:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conversation closed, status: 409, code: conversation_closed }
+      '422':
+        description: Body too long, etc.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              tooLong:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Validation failed, status: 422, code: message_too_long }
+
+  MarkConversationRead:
+    tags: [Customer · Support]
+    operationId: markSupportConversationRead
+    summary: Reset `unreadByUser` on the conversation.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ConversationIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  RateConversation:
+    tags: [Customer · Support]
+    operationId: rateSupportConversation
+    summary: Submit a CSAT rating after the conversation is resolved.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ConversationIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rating]
+            properties:
+              rating:  { type: integer, minimum: 1, maximum: 5 }
+              comment: { type: string, maxLength: 1000 }
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Conversation not resolved or already rated.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }

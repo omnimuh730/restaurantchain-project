@@ -1,0 +1,15 @@
+stateDiagram-v2
+%% Table status reflects floor-plan reality; transitions are mostly POS-driven.
+    [*] --> available
+    available --> reserved : reservation.confirmed for<br/>upcoming slot
+    available --> occupied : POS opens order on table
+    reserved --> occupied  : QR check-in / POS check-in
+    reserved --> available : reservation cancelled / no_show
+    occupied --> needs_cleaning : order paid · party leaves
+    needs_cleaning --> available : POS marks clean
+    available --> out_of_service : manager flag
+    out_of_service --> available : manager unflag
+
+    note right of out_of_service
+      Cannot accept reservations or orders.
+    end note

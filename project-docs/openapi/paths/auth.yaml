@@ -1,0 +1,552 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Auth'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `auth` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/auth.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /auth/refresh:
+    post: { $ref: '#/x-operations/Refresh' }
+  /auth/sign-out:
+    post: { $ref: '#/x-operations/SignOut' }
+  /auth/username-available:
+    get: { $ref: '#/x-operations/UsernameAvailable' }
+  /auth/customer/sign-in:
+    post: { $ref: '#/x-operations/CustomerSignIn' }
+  /auth/customer/sign-up:
+    post: { $ref: '#/x-operations/CustomerSignUp' }
+  /auth/password-reset/complete:
+    post: { $ref: '#/x-operations/PasswordResetComplete' }
+  /auth/password-reset/start:
+    post: { $ref: '#/x-operations/PasswordResetStart' }
+  /auth/password-reset/verify-question:
+    post: { $ref: '#/x-operations/PasswordResetVerifyQuestion' }
+  /auth/staff/sign-in:
+    post: { $ref: '#/x-operations/StaffSignIn' }
+  /auth/staff/sign-up/restaurant:
+    post: { $ref: '#/x-operations/StaffSignUpRestaurant' }
+  /auth/staff/sign-up/staff:
+    post: { $ref: '#/x-operations/StaffSignUpStaff' }
+
+x-operations:
+  # Auth endpoints — customer + staff sign-up/in, sign-out, refresh, password reset.
+  # Each top-level key is one operation referenced from `openapi.yaml#/paths/...`.
+
+  CustomerSignUp:
+    tags: [Auth]
+    operationId: customerSignUp
+    summary: Create a customer account.
+    description: |
+      Creates a new customer account from the **Sign Up mode select → Customer** flow.
+      `securityAnswers` corresponds to the questions returned by `GET /metadata/security_questions`.
+      Optional `referralCode` redeems a friend's `referral.code` and credits both users
+      according to the referral reward in `metadata.subscription_plans`/system policy.
+
+      On success the response includes long-lived `tokens` so the app can deep-link
+      straight into Discover.
+    security: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [username, password, fullName, securityAnswers]
+            properties:
+              username:        { type: string, minLength: 3, maxLength: 32, pattern: '^[a-z0-9._-]+$' }
+              password:        { type: string, minLength: 8, maxLength: 128, format: password }
+              fullName:        { type: string, minLength: 1, maxLength: 80 }
+              email:           { type: string, format: email }
+              phone:           { type: string, example: '+8210123456789' }
+              referralCode:    { type: string }
+              preferredTheme:  { type: string, enum: [airbnb, ocean, forest, midnight], default: airbnb }
+              acceptTermsAt:   { type: string, format: date-time }
+              securityAnswers:
+                type: array
+                minItems: 3
+                maxItems: 3
+                items: { $ref: '../components/schemas.yaml#/components/schemas/SignUpSecurityAnswer' }
+          examples:
+            minimal:
+              value:
+                username: sarah
+                password: 'P@ssw0rdStrong!'
+                fullName: Sarah Kim
+                email: sarah@example.com
+                phone: '+8210123456789'
+                securityAnswers:
+                  - { questionId: first_pet_name, answer: Mochi }
+                  - { questionId: city_of_birth,  answer: Busan }
+                  - { questionId: favorite_dish,  answer: Bibimbap }
+            withReferral:
+              value:
+                username: alex
+                password: 'P@ssw0rdStrong!'
+                fullName: Alex Park
+                referralCode: SARAH-7Q3
+                securityAnswers:
+                  - { questionId: first_pet_name, answer: Coco }
+                  - { questionId: city_of_birth,  answer: Seoul }
+                  - { questionId: favorite_dish,  answer: Pasta }
+    responses:
+      '201':
+        description: Account created.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+          Idempotency-Replay: { $ref: '../components/common.yaml#/components/headers/IdempotencyReplay' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthCustomerResponse' }
+      '400':
+        $ref: '../components/common.yaml#/components/responses/BadRequest'
+      '409':
+        description: Username/email/phone already taken, or referral conflicts.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              usernameTaken:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conflict, status: 409, code: username_taken, detail: 'username `sarah` is taken' }
+              referralSelf:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conflict, status: 409, code: referral_self_redeem, detail: 'cannot redeem your own referral' }
+      '422':
+        description: Validation error.
+        content:
+          application/problem+json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/Problem'
+                - type: object
+                  properties:
+                    errors:
+                      type: array
+                      items: { $ref: '../components/common.yaml#/components/schemas/FieldError' }
+            examples:
+              badPassword:
+                value:
+                  type: 'https://errors.catchtable.example/validation_failed'
+                  title: Validation failed
+                  status: 422
+                  code: password_policy_violation
+                  errors:
+                    - { field: password, rule: format, message: 'must include letters and numbers' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  CustomerSignIn:
+    tags: [Auth]
+    operationId: customerSignIn
+    summary: Sign in as a customer.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [identifier, password]
+            properties:
+              identifier:
+                type: string
+                description: 'username, email, or E.164 phone'
+              password: { type: string, format: password }
+              deviceHint:
+                type: object
+                properties:
+                  platform:    { type: string, enum: [ios, android, web] }
+                  deviceId:    { type: string }
+                  appVersion:  { type: string }
+          example:
+            identifier: sarah
+            password: 'P@ssw0rdStrong!'
+            deviceHint: { platform: ios, deviceId: 'apns-ABCDEF', appVersion: '2.7.0' }
+    responses:
+      '200':
+        description: Signed in.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthCustomerResponse' }
+      '401':
+        description: Invalid credentials.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              badCreds:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Unauthenticated, status: 401, code: invalid_credentials }
+              locked:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Account locked, status: 401, code: account_locked, detail: 'Too many failed attempts. Try again in 10 minutes.' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  StaffSignUpRestaurant:
+    tags: [Auth]
+    operationId: staffSignUpRestaurant
+    summary: Register a new restaurant + manager (Step 1 → Step 2 of the restaurant sign-up flow).
+    description: |
+      Creates a `restaurants` document in `pending_approval` and the manager `staff_users`
+      document in `pending_approval` linked to it.  Returns tokens immediately so the app
+      can render the **Approval wait** screen and refresh the restaurant status via realtime.
+    security: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [restaurant, manager]
+            properties:
+              restaurant:
+                type: object
+                required: [name, cuisine, address, location, contact, businessRegNumber]
+                properties:
+                  name:               { type: string, maxLength: 120 }
+                  slug:               { type: string }
+                  cuisine:            { type: array, items: { type: string }, minItems: 1, maxItems: 5 }
+                  priceLevel:         { type: integer, enum: [1,2,3,4] }
+                  description:        { type: string, maxLength: 4000 }
+                  address:            { $ref: '../components/schemas.yaml#/components/schemas/Address' }
+                  location:           { $ref: '../components/common.yaml#/components/schemas/GeoPoint' }
+                  contact:
+                    type: object
+                    properties:
+                      primaryPhone: { type: string }
+                      websiteUrl:   { type: string, format: uri-reference }
+                  businessRegNumber:  { type: string }
+                  businessLicenseUrl: { type: string, format: uri-reference }
+              manager:
+                type: object
+                required: [username, password, fullName]
+                properties:
+                  username: { type: string, minLength: 3, maxLength: 32, pattern: '^[a-z0-9._-]+$' }
+                  password: { type: string, format: password, minLength: 8, maxLength: 128 }
+                  fullName: { type: string }
+                  phone:    { type: string }
+                  email:    { type: string, format: email }
+    responses:
+      '201':
+        description: Restaurant + manager created in `pending_approval`.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthStaffResponse' }
+      '409':
+        description: 'Username taken, business reg number already registered, etc.'
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  StaffSignUpStaff:
+    tags: [Auth]
+    operationId: staffSignUpStaff
+    summary: Apply to join an existing restaurant as a waiter/chef/cashier.
+    description: |
+      Implements **Restaurant selection 1 → 2 → Staff Registration → Approval wait**.
+      Creates a `staff_users` doc in `pending_approval` AND appends a `pendingStaff[]`
+      entry to the target restaurant. The manager approves/rejects via
+      `POST /pos/restaurants/{restaurantId}/staff/pending/{requestId}:approve`.
+    security: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [restaurantId, username, password, fullName, requestedRole]
+            properties:
+              restaurantId:  { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              username:      { type: string, minLength: 3, maxLength: 32 }
+              password:      { type: string, format: password, minLength: 8 }
+              fullName:      { type: string }
+              phone:         { type: string }
+              requestedRole: { type: string, enum: [waiter, chef, cashier] }
+              note:          { type: string, maxLength: 500 }
+    responses:
+      '201':
+        description: Pending request created. Returns short-lived tokens so app can poll for approval.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthStaffResponse' }
+      '404':
+        description: Restaurant not found or not accepting staff applications.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Username taken, or staff already attached to another restaurant.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  StaffSignIn:
+    tags: [Auth]
+    operationId: staffSignIn
+    summary: Sign in as a staff member.
+    description: |
+      A successful response with `passwordIsDefault: true` means the staff member must
+      update their password in **Settings → Security** (still allowed to use the app).
+      Pending or inactive accounts are rejected with `account_pending_approval` /
+      `account_inactive` so the app can render the **Approval wait** screen.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [restaurantId, identifier, password]
+            properties:
+              restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              identifier:   { type: string, description: 'username or email' }
+              password:     { type: string, format: password }
+              deviceHint:
+                type: object
+                properties:
+                  platform:    { type: string, enum: [ios, android, web] }
+                  deviceId:    { type: string }
+                  appVersion:  { type: string }
+    responses:
+      '200':
+        description: Signed in.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthStaffResponse' }
+      '401':
+        description: Invalid credentials, account inactive, or pending approval.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              pending:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Pending approval, status: 401, code: account_pending_approval }
+              inactive:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Account inactive, status: 401, code: account_inactive }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  SignOut:
+    tags: [Auth]
+    operationId: signOut
+    summary: Sign out the current session.
+    description: Revokes the access token and (optionally) the refresh token. Idempotent.
+    security:
+      - customerAuth: []
+      - staffAuth: []
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              refreshToken: { type: string, description: 'Optional. If supplied, also revoked.' }
+              allDevices:   { type: boolean, default: false }
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  Refresh:
+    tags: [Auth]
+    operationId: refreshTokens
+    summary: Exchange a refresh token for a new access (and refresh) token.
+    description: |
+      Customer or staff. The new tokens preserve the original `subjectKind` and any tenant
+      claim. Refresh-token reuse (i.e. presenting an already-rotated token) revokes the
+      whole session family and returns 401.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [refreshToken]
+            properties:
+              refreshToken: { type: string }
+    responses:
+      '200':
+        description: New tokens.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthTokens' }
+      '401':
+        description: Refresh token invalid, expired, or reused.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  PasswordResetStart:
+    tags: [Auth]
+    operationId: passwordResetStart
+    summary: Begin the password reset flow.
+    description: |
+      Returns the customer's two security questions (no answers!) and a `resetSessionId`.
+      The endpoint is rate-limited per identifier; it never reveals whether the account exists.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [identifier]
+            properties:
+              identifier: { type: string, description: 'username, email, or phone' }
+    responses:
+      '200':
+        description: Reset session created (always, even if the user does not exist — questions are dummies in that case).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetSessionId, questions, expiresAt]
+              properties:
+                resetSessionId: { type: string }
+                questions:
+                  type: array
+                  minItems: 2
+                  maxItems: 2
+                  items:
+                    type: object
+                    properties:
+                      questionId: { type: string }
+                      prompt:     { type: string }
+                expiresAt: { type: string, format: date-time }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  PasswordResetVerifyQuestion:
+    tags: [Auth]
+    operationId: passwordResetVerifyQuestion
+    summary: Submit answers to the security questions.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [resetSessionId, answers]
+            properties:
+              resetSessionId: { type: string }
+              answers:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items:
+                  type: object
+                  required: [questionId, answer]
+                  properties:
+                    questionId: { type: string }
+                    answer:     { type: string, minLength: 1, maxLength: 256 }
+    responses:
+      '200':
+        description: Answers correct. Returns a one-shot `verificationToken` for `complete`.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificationToken, expiresAt]
+              properties:
+                verificationToken: { type: string }
+                expiresAt:         { type: string, format: date-time }
+      '401':
+        description: Wrong answers; remaining attempts in `code`.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              wrong:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Wrong answers, status: 401, code: security_answer_invalid, detail: '2 attempts remaining' }
+              exhausted:
+                value: { type: 'https://errors.catchtable.example/unauthenticated', title: Locked, status: 401, code: security_answer_attempts_exceeded }
+      '410':
+        description: Reset session expired.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              expired:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Expired, status: 410, code: reset_token_expired }
+
+  PasswordResetComplete:
+    tags: [Auth]
+    operationId: passwordResetComplete
+    summary: Set a new password using a verification token.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [verificationToken, newPassword]
+            properties:
+              verificationToken: { type: string }
+              newPassword:       { type: string, format: password, minLength: 8, maxLength: 128 }
+    responses:
+      '200':
+        description: Password updated. Returns fresh tokens so the user is signed in.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthTokens' }
+      '401':
+        description: Verification token invalid or expired.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422':
+        description: New password violates policy.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              tooShort:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Validation failed, status: 422, code: password_policy_violation, detail: 'minimum length is 8' }
+
+  UsernameAvailable:
+    tags: [Auth]
+    operationId: checkUsername
+    summary: Check whether a username is available.
+    description: Used by the sign-up form to debounce availability checks. Always returns 200.
+    security: []
+    parameters:
+      - name: username
+        in: query
+        required: true
+        schema: { type: string, minLength: 3, maxLength: 32, pattern: '^[a-z0-9._-]+$' }
+    responses:
+      '200':
+        description: Availability info.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [available]
+              properties:
+                available:   { type: boolean }
+                suggestions: { type: array, items: { type: string } }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }

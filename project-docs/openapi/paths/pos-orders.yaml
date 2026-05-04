@@ -1,0 +1,584 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Orders'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-orders` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-orders.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/orders/{orderId}:
+    get: { $ref: '#/x-operations/GetOrder' }
+  /pos/orders/{orderId}:finalize-bill:
+    post: { $ref: '#/x-operations/FinalizeBill' }
+  /pos/orders/{orderId}:request-bill:
+    post: { $ref: '#/x-operations/RequestBill' }
+  /pos/orders/{orderId}:send-batch:
+    post: { $ref: '#/x-operations/SendBatch' }
+  /pos/orders/{orderId}:void:
+    post: { $ref: '#/x-operations/VoidOrder' }
+  /pos/orders/{orderId}/items:
+    post: { $ref: '#/x-operations/AddDraftItem' }
+  /pos/orders/{orderId}/payments:
+    post: { $ref: '#/x-operations/PayOrder' }
+  /pos/restaurants/{restaurantId}/orders:
+    get: { $ref: '#/x-operations/ListOrders' }
+    post: { $ref: '#/x-operations/OpenOrder' }
+  /pos/orders/{orderId}/items/{itemId}:
+    delete: { $ref: '#/x-operations/DeleteDraftItem' }
+    patch: { $ref: '#/x-operations/UpdateOrderItem' }
+  /pos/orders/{orderId}/items/{itemId}:void:
+    post: { $ref: '#/x-operations/VoidOrderItem' }
+
+x-operations:
+  # POS Orders: list, open, items (add/edit/delete/void), send-batch, bills, payments.
+
+  ListOrders:
+    tags: [POS · Orders]
+    operationId: posListOrders
+    summary: List active orders for the restaurant.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: status
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [open, bill_requested, bill, paid, voided] }
+      - name: floorId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+      - name: tableId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Orders.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  OpenOrder:
+    tags: [POS · Orders]
+    operationId: posOpenOrder
+    summary: Open a new order on a table.
+    description: |
+      If `reservationId` is supplied, server validates the table is consistent with the
+      reservation. Returns `409` if the table already has an open order.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [tableId, partySize]
+            properties:
+              tableId:       { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              partySize:     { type: integer, minimum: 1 }
+              reservationId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              guestUserIds:
+                type: array
+                items: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              notes:         { type: string, maxLength: 1000 }
+    responses:
+      '201':
+        description: Order opened.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404':
+        description: Table or reservation not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Table already has an open order, or reservation table mismatch.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  GetOrder:
+    tags: [POS · Orders]
+    operationId: posGetOrder
+    summary: Read one order.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+    responses:
+      '200':
+        description: Order.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  AddDraftItem:
+    tags: [POS · Orders]
+    operationId: posAddDraftItem
+    summary: Append a `draft` item to an open order.
+    description: |
+      Items start with `chefStatus=draft` until the staff calls `:send-batch`. The
+      `draftItemCount` counter increments. Returns `422 menu_item_unavailable` for
+      sold-out items.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [menuItemId, qty]
+            properties:
+              menuItemId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              qty:        { type: integer, minimum: 1, maximum: 99 }
+              note:       { type: string, maxLength: 200 }
+              modifiers:
+                type: array
+                items:
+                  type: object
+                  required: [modifierId]
+                  properties:
+                    modifierId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '201':
+        description: Item added (draft).
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/OrderItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404':
+        description: Order or menu item not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Order not open or already billed.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              notOpen:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Order not open, status: 409, code: order_not_open }
+      '422':
+        description: Menu item unavailable, modifier invalid, etc.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              soldOut:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Item unavailable, status: 422, code: menu_item_unavailable }
+
+  UpdateOrderItem:
+    tags: [POS · Orders]
+    operationId: posUpdateOrderItem
+    summary: Edit a draft item (qty, modifiers, note).
+    description: 'Only `chefStatus=draft` items can be edited; sent items must be voided/recalled instead.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              qty:  { type: integer, minimum: 1, maximum: 99 }
+              note: { type: string, maxLength: 200 }
+              modifiers:
+                type: array
+                items:
+                  type: object
+                  required: [modifierId]
+                  properties:
+                    modifierId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Updated item.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/OrderItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Item already sent, voided, or order finalized.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              sent:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already sent, status: 409, code: cannot_void_after_send }
+
+  DeleteDraftItem:
+    tags: [POS · Orders]
+    operationId: posDeleteDraftItem
+    summary: Remove a `draft` item before it is sent to the kitchen.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Item is no longer in `draft`.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  VoidOrderItem:
+    tags: [POS · Orders]
+    operationId: posVoidOrderItem
+    summary: Void an already-sent item (post-kitchen) with a manager reason.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Voided.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/OrderItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403':
+        description: Lacks `orders.void` permission.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Cannot void after order is paid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              paid:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Order paid, status: 409, code: cannot_recall_after_paid }
+
+  SendBatch:
+    tags: [POS · Orders]
+    operationId: posSendBatch
+    summary: Send all current `draft` items as a single chef batch.
+    description: |
+      Mints a new `sendBatchId`, flips selected items from `draft → sent`, sets
+      `sentAt`, and emits `order.batch.sent`. Returns `409 invalid_transition` if
+      there are no `draft` items.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              itemIds:
+                type: array
+                description: 'Optional subset of draft items to send. If omitted, sends all `draft` items.'
+                items: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              note: { type: string, maxLength: 240 }
+    responses:
+      '200':
+        description: Batch sent.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                batchId:    { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                order:      { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+                batchView:  { $ref: '../components/schemas.yaml#/components/schemas/ChefBatchView' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: No draft items to send, or order not open.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  RequestBill:
+    tags: [POS · Orders]
+    operationId: posRequestBill
+    summary: Mark the order as `bill_requested` (guest asked for the check).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+    responses:
+      '200':
+        description: Order updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Wrong state (already paid/voided).
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  FinalizeBill:
+    tags: [POS · Orders]
+    operationId: posFinalizeBill
+    summary: Compute and freeze the bill (subtotal, tax, tip, total).
+    description: |
+      Server recomputes from current items and embeds the result on `order.bill`.
+      Allowed only for orders in `bill_requested` or `open`. Sets `status=bill`.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              tipRate: { type: number, minimum: 0, maximum: 0.5 }
+              tip:     { $ref: '../components/common.yaml#/components/schemas/Money' }
+              taxRate: { type: number, minimum: 0, maximum: 0.5 }
+    responses:
+      '200':
+        description: Bill finalized.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Already finalized or wrong state.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already finalized, status: 409, code: bill_already_finalized }
+      '422':
+        description: Mixed currency in items.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              mixed:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Mixed currency, status: 422, code: mixed_currency_disallowed }
+
+  VoidOrder:
+    tags: [POS · Orders]
+    operationId: posVoidOrder
+    summary: Void the entire order (manager-only, with reason).
+    description: 'Allowed only when no payments are captured.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Order voided.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Has captured payments — must refund first.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  PayOrder:
+    tags: [POS · Orders]
+    operationId: posPayOrder
+    summary: Capture payment for the bill (cash, credit, wallet, or mix).
+    description: |
+      Three method shapes (mirrors the page-driven Payment screens):
+
+      **Cash** — `tendered` ≥ `bill.total`. Server returns `change`.
+      **Credit** — Charges via PSP. Returns the captured `payment`. Failed PSP attempts
+      return `422 payment_failed` with a `psp` failure code.
+      **Wallet** — Debits the customer wallet (auto-routed by `pool` matching
+      `bill.total.currency`). Returns `422 wallet_insufficient_balance` if too low.
+      **Mix** — Array of partial methods; the sum must equal `bill.total`.
+
+      Idempotent on `Idempotency-Key`. Replays return the original payment.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - title: cash
+                type: object
+                required: [method, tendered]
+                properties:
+                  method:   { const: cash }
+                  tendered: { $ref: '../components/common.yaml#/components/schemas/Money' }
+              - title: credit
+                type: object
+                required: [method, depositCardId]
+                properties:
+                  method:        { const: credit }
+                  depositCardId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  customerUserId: { $ref: '../components/common.yaml#/components/schemas/ObjectId', description: 'Required if charging the customer''s saved card via QR.' }
+                  customerPaymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              - title: wallet
+                type: object
+                required: [method, customerUserId]
+                properties:
+                  method:         { const: wallet }
+                  customerUserId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  pool:           { type: string, enum: [domestic, foreign, bonus] }
+              - title: mix
+                type: object
+                required: [method, parts]
+                properties:
+                  method: { const: mix }
+                  parts:
+                    type: array
+                    minItems: 2
+                    items:
+                      type: object
+                      required: [method, amount]
+                      properties:
+                        method: { type: string, enum: [cash, credit, wallet] }
+                        amount: { $ref: '../components/common.yaml#/components/schemas/Money' }
+                        depositCardId:           { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                        customerUserId:          { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                        customerPaymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                        pool:                    { type: string, enum: [domestic, foreign, bonus] }
+                        tendered:                { $ref: '../components/common.yaml#/components/schemas/Money' }
+            discriminator:
+              propertyName: method
+          examples:
+            cash:
+              value: { method: cash, tendered: { amount: '50000', currency: KRW } }
+            credit:
+              value: { method: credit, depositCardId: 65f0000000000000000c0011 }
+            wallet:
+              value: { method: wallet, customerUserId: 65f0000000000000000a0001 }
+            mix:
+              value:
+                method: mix
+                parts:
+                  - { method: wallet, amount: { amount: '20000', currency: KRW }, customerUserId: 65f0000000000000000a0001 }
+                  - { method: credit, amount: { amount: '30000', currency: KRW }, depositCardId: 65f0000000000000000c0011 }
+    responses:
+      '200':
+        description: Payment captured. Order status flips to `paid` if total tender ≥ total.
+        headers:
+          Idempotency-Replay: { $ref: '../components/common.yaml#/components/headers/IdempotencyReplay' }
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:    { $ref: '../components/schemas.yaml#/components/schemas/Order' }
+                payments:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Payment' }
+                change:   { $ref: '../components/common.yaml#/components/schemas/Money' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404':
+        description: Order, card, or wallet customer not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Order not in `bill_requested|bill`, or already paid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              notFinalized:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Bill not finalized, status: 409, code: bill_not_finalized }
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already paid, status: 409, code: order_already_billed }
+      '422':
+        description: Validation/business errors (insufficient balance, bad mix, PSP declined, etc.).
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              tooLow:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Tendered too low, status: 422, code: tendered_too_low }
+              mixMismatch:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Mix total mismatch, status: 422, code: mix_total_mismatch }
+              insufficient:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Insufficient balance, status: 422, code: wallet_insufficient_balance }
+              declined:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Card declined, status: 422, code: payment_declined }
+      '502':
+        description: PSP unreachable.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              unreachable:
+                value: { type: 'https://errors.catchtable.example/internal_error', title: PSP unreachable, status: 502, code: psp_unreachable }

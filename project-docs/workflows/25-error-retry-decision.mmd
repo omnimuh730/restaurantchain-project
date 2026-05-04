@@ -1,0 +1,20 @@
+flowchart TD
+%% RFC 7807 Problem responses + a deterministic retry policy. Codes match
+%% common.yaml#ErrorCode.
+    R["HTTP response"] --> S{"status?"}
+    S -- "2xx" --> OK([done])
+    S -- "400 bad_request"        --> Fix["Fix payload — never retry"]
+    S -- "401 token_expired"      --> Refresh["Refresh token, then retry once"]
+    S -- "401 unauthenticated"    --> SignIn["Force sign-in"]
+    S -- "403"                    --> Fix
+    S -- "404"                    --> Fix
+    S -- "409 idempotency_key_conflict" --> NewKey["Generate new key, retry"]
+    S -- "409 invalid_transition / *_already_*" --> Inspect["Refresh resource, decide"]
+    S -- "410 invite_expired"     --> Inspect
+    S -- "422 validation_failed"  --> ShowErrors["Show field errors[]"]
+    S -- "423 *_attempts_exceeded" --> Lockout["Show lockout · cool-down"]
+    S -- "429 too_many_requests"  --> Backoff["Wait Retry-After<br/>then retry (max 3)"]
+    S -- "5xx"                    --> Backoff5["Exp backoff jitter<br/>idempotent ops only"]
+
+    classDef bad fill:#fee,stroke:#a00,color:#600
+    class Fix,SignIn,ShowErrors,Lockout bad

@@ -1,0 +1,20 @@
+flowchart TD
+%% Notifications are created by domain events and fan out to:
+%%   1. in-app feed (always · `notifications` doc)
+%%   2. push (if device.isActive and channel includes 'push')
+%%   3. email/sms (if user opted in)
+%%   4. ws event for live UI badge
+    Ev["Domain event<br/>(reservation.confirmed,<br/>order.paid, etc.)"] --> Builder["Notification builder<br/>(template + locale)"]
+    Builder --> Doc[(notifications doc)]
+    Doc --> Feed["Customer feed<br/>GET /me/notifications"]
+    Doc --> StaffFeed["Staff feed (POS)"]
+
+    Builder -->|"channel=push"| Push["FCM / APNs / web-push"]
+    Builder -->|"channel=email"| Email["Email gateway"]
+    Builder -->|"channel=sms"| Sms["SMS gateway"]
+
+    Doc -. "ws notification.created<br/>+ user.notifications.unreadCountChanged" .-> Live[Live badge & toast]
+
+    Feed -->|"POST read / mark-all-read"| Doc
+    Feed -->|"DELETE"| Doc
+    Doc -. "ws notification.read / notification.deleted" .-> Live

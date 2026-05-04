@@ -1,0 +1,99 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000a6001" },
+    "subjectKind": "customer",
+    "customerUserId": { "$oid": "65f0000000000000000c0001" },
+    "topic": "Refund question",
+    "subject": "Apr 18 reservation - was I charged twice?",
+    "status": "pending_user",
+    "priority": "normal",
+    "channel": "in_app_chat",
+    "assignedAgentId": "agent_orla_22",
+    "context": {
+      "reservationId": { "$oid": "65f0000000000000000e0002" },
+      "articleSlug": "refund-policy"
+    },
+    "messageCount": 4,
+    "unreadByUser": 1,
+    "unreadByAgent": 0,
+    "lastMessageAt": { "$date": "2026-04-19T10:33:00.000Z" },
+    "lastMessagePreview": "We've checked: only one charge on Apr 18. Let me know if you need anything else!",
+    "messages": [
+      {
+        "_id": { "$oid": "65f0000000000000000a6101" },
+        "senderKind": "user",
+        "senderId": { "$oid": "65f0000000000000000c0001" },
+        "body": "Hi - I see two charges from Sakura Omakase on Apr 18. Could you confirm whether one of them is pending?",
+        "sentAt": { "$date": "2026-04-19T09:11:00.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a6102" },
+        "senderKind": "agent",
+        "senderId": null,
+        "body": "Hello Sarah! Looking into this now, one moment please.",
+        "readByUserAt": { "$date": "2026-04-19T09:14:00.000Z" },
+        "sentAt":       { "$date": "2026-04-19T09:13:30.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a6103" },
+        "senderKind": "system",
+        "body": "Agent attached: refund-policy article.",
+        "sentAt": { "$date": "2026-04-19T09:14:00.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a6104" },
+        "senderKind": "agent",
+        "senderId": null,
+        "body": "We've checked: only one charge on Apr 18. Let me know if you need anything else!",
+        "sentAt": { "$date": "2026-04-19T10:33:00.000Z" }
+      }
+    ],
+    "openedAt": { "$date": "2026-04-19T09:11:00.000Z" },
+    "createdAt": { "$date": "2026-04-19T09:11:00.000Z" },
+    "updatedAt": { "$date": "2026-04-19T10:33:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000a6002" },
+    "subjectKind": "staff",
+    "staffUserId":   { "$oid": "65f0000000000000000a0001" },
+    "restaurantId":  { "$oid": "65f0000000000000000b0001" },
+    "topic": "Issue with QR rotation",
+    "status": "resolved",
+    "priority": "high",
+    "channel": "in_app_chat",
+    "assignedAgentId": "agent_dario_07",
+    "context": {},
+    "messageCount": 3,
+    "unreadByUser": 0,
+    "unreadByAgent": 0,
+    "lastMessageAt": { "$date": "2026-04-22T08:01:00.000Z" },
+    "lastMessagePreview": "Glad it's working. Closing this one out.",
+    "messages": [
+      {
+        "_id": { "$oid": "65f0000000000000000a6201" },
+        "senderKind": "user",
+        "senderId": { "$oid": "65f0000000000000000a0001" },
+        "body": "After rotating QR for table P1, customers said scan failed. Could you check?",
+        "sentAt": { "$date": "2026-04-22T07:45:00.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a6202" },
+        "senderKind": "agent",
+        "body": "Old token cached on the customer's app — they'll need to refresh. We've also pushed v7 to the new payload.",
+        "sentAt": { "$date": "2026-04-22T07:55:00.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a6203" },
+        "senderKind": "agent",
+        "body": "Glad it's working. Closing this one out.",
+        "sentAt": { "$date": "2026-04-22T08:01:00.000Z" }
+      }
+    ],
+    "openedAt":   { "$date": "2026-04-22T07:45:00.000Z" },
+    "resolvedAt": { "$date": "2026-04-22T08:01:00.000Z" },
+    "rating": 5,
+    "ratingComment": "Quick fix, thanks.",
+    "createdAt": { "$date": "2026-04-22T07:45:00.000Z" },
+    "updatedAt": { "$date": "2026-04-22T08:01:00.000Z" }
+  }
+]

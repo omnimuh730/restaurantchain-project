@@ -1,0 +1,1373 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Shared Schemas Components'
+  version: 1.0.0
+  description: |
+    Shared OpenAPI schemas components $refed from every path module and the root spec.
+    Wrapped as a standalone OpenAPI 3.1 doc (with `paths: {}`) so editors that require
+    a complete document can render it without a bundler.
+paths: {}
+
+# All domain schemas. Mirrors `api-docs/page-driven/schema/`.
+# Refs use `./common.yaml#/components/schemas/...` for primitives.
+
+components:
+  schemas:
+
+    # ===========================================================
+    # Customer & staff
+    # ===========================================================
+
+    CustomerUser:
+      type: object
+      required: [id, username, fullName, status, wallets, rewards, referral, dailyBonus, createdAt]
+      properties:
+        id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
+        username:           { type: string, example: sarah }
+        fullName:           { type: string, example: Sarah Kim }
+        phone:              { type: [string, 'null'], example: '+8210123456789' }
+        avatarImg:          { type: [string, 'null'], description: 'Base64 image data URI (e.g. data:image/png;base64,...)' }
+        status:
+          type: string
+          enum: [active, deactivated, deleted]
+        wallets:            { $ref: '#/components/schemas/UserWallets' }
+        rewards:            { $ref: '#/components/schemas/UserRewards' }
+        paymentMethods:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentMethod' }
+        savedItems:
+          type: array
+          items: { $ref: '#/components/schemas/SavedItem' }
+        friends:
+          type: array
+          items: { $ref: '#/components/schemas/Friend' }
+        referral:           { $ref: '#/components/schemas/Referral' }
+        dailyBonus:         { $ref: '#/components/schemas/DailyBonus' }
+        subscription:
+          oneOf:
+            - $ref: '#/components/schemas/CustomerSubscriptionSummary'
+            - { type: 'null' }
+        createdAt:          { type: string, format: date-time }
+        updatedAt:          { type: string, format: date-time }
+        deletedAt:          { type: [string, 'null'], format: date-time }
+
+    UserWallets:
+      type: object
+      required: [domestic, foreign, bonus]
+      properties:
+        domestic:
+          type: object
+          required: [currency, amount]
+          properties:
+            currency: { type: string, example: KRW }
+            amount:   { type: string, description: 'Decimal amount as string (Decimal128).' }
+        foreign:
+          type: object
+          required: [currency, amount]
+          properties:
+            currency: { type: string, example: USD }
+            amount:   { type: string, description: 'Decimal amount as string (Decimal128).' }
+        bonus:
+          type: object
+          required: [currency, amount]
+          properties:
+            currency:  { type: string, example: USD }
+            amount:    { type: string, description: 'Decimal amount as string (Decimal128).' }
+
+    UserRewards:
+      type: object
+      required: [tier, points]
+      properties:
+        tier:             { type: string, enum: [silver, gold, platinum, diamond] }
+        points:           { type: integer, minimum: 0 }
+        nextTier:
+          type: [string, 'null']
+          enum: [gold, platinum, diamond, null]
+        pointsToNextTier: { type: integer, minimum: 0 }
+
+    PaymentMethod:
+      type: object
+      required: [id, pspProvider, kind, isDefault, fundsForeign, fundsDomestic, addedAt]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pspProvider:   { type: string, example: stripe }
+        pspExternalId: { type: string }
+        kind:          { type: string, enum: [card, apple_pay, google_pay, paypal, bank_account] }
+        card:
+          type: object
+          properties:
+            brand:    { type: string, example: Visa }
+            last4:    { type: string, pattern: '^[0-9]{4}$' }
+            expMonth: { type: integer, minimum: 1, maximum: 12 }
+            expYear:  { type: integer, minimum: 2000 }
+        bank:
+          type: object
+          properties:
+            bankName: { type: string }
+            last4:    { type: string, pattern: '^[0-9]{4}$' }
+        isDefault:     { type: boolean }
+        fundsForeign:  { type: boolean }
+        fundsDomestic: { type: boolean }
+        addedAt:       { type: string, format: date-time }
+
+    Device:
+      type: object
+      required: [id, provider, token, platform, isActive, lastSeenAt]
+      properties:
+        id:         { $ref: './common.yaml#/components/schemas/ObjectId' }
+        provider:   { type: string, enum: [fcm, apns, web_push] }
+        token:      { type: string }
+        platform:   { type: string, enum: [ios, android, web] }
+        appVersion: { type: string }
+        deviceId:   { type: string }
+        isActive:   { type: boolean }
+        lastSeenAt: { type: string, format: date-time }
+
+    SavedItem:
+      type: object
+      required: [id, itemType, savedAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        itemType:     { type: string, enum: [restaurant, food] }
+        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        foodId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+        savedAt:      { type: string, format: date-time }
+
+    Friend:
+      type: object
+      required: [friendId, status, source, requestedAt]
+      properties:
+        friendId:         { $ref: './common.yaml#/components/schemas/ObjectId' }
+        status:           { type: string, enum: [pending_outgoing, pending_incoming, accepted, blocked] }
+        source:           { type: string, enum: [request, import] }
+        requestedAt:      { type: string, format: date-time }
+        acceptedAt:       { type: string, format: date-time }
+
+    Referral:
+      type: object
+      required: [code, redemptions]
+      properties:
+        code:             { type: string, example: SARAH-7Q3 }
+        referredByCode:   { type: string }
+        reward:           { $ref: './common.yaml#/components/schemas/Money' }
+        redemptions:
+          type: array
+          items:
+            type: object
+            properties:
+              refereeUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+              redeemedAt:    { type: string, format: date-time }
+
+    DailyBonus:
+      type: object
+      required: [history]
+      properties:
+        lastClaimedDate: { type: string, format: date, description: 'YYYY-MM-DD in local tz.' }
+        history:
+          type: array
+          items:
+            type: object
+            required: [localDate, selectedBox, claimedAt]
+            properties:
+              localDate:    { type: string, format: date }
+              selectedBox:  { type: integer }
+              reward:       { $ref: './common.yaml#/components/schemas/Money' }
+              claimedAt:    { type: string, format: date-time }
+
+    DailyBonusReward:
+      oneOf:
+        - type: object
+          required: [kind, points]
+          properties:
+            kind:   { type: string, enum: [points] }
+            points: { type: integer, minimum: 1 }
+        - type: object
+          required: [kind, amount]
+          properties:
+            kind:   { type: string, enum: [bonus_credit] }
+            amount: { $ref: './common.yaml#/components/schemas/Money' }
+        - type: object
+          required: [kind, couponCode]
+          properties:
+            kind:       { type: string, enum: [coupon] }
+            couponCode: { type: string }
+
+    CustomerSubscriptionSummary:
+      type: object
+      required: [subscriptionId, planCode, status, currentPeriodEnd, cancelAtPeriodEnd]
+      properties:
+        subscriptionId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+        planCode:           { type: string, enum: [pro_monthly, pro_quarterly, pro_yearly] }
+        status:             { type: string, enum: [trialing, active, past_due, cancelled, expired] }
+        currentPeriodEnd:   { type: string, format: date-time }
+        cancelAtPeriodEnd:  { type: boolean }
+
+    StaffUser:
+      type: object
+      required: [id, restaurantId, username, fullName, role, permissions, status, createdAt]
+      properties:
+        id:                { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        username:          { type: string }
+        passwordIsDefault: { type: boolean }
+        fullName:          { type: string }
+        role:              { type: string, enum: [manager, waiter, chef, cashier] }
+        permissions:
+          type: array
+          items: { type: string }
+        status:            { type: string, enum: [pending_approval, active, inactive, rejected] }
+        approvedBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        approvedAt:        { type: string, format: date-time }
+        rejectedBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        rejectedAt:        { type: string, format: date-time }
+        inactivatedAt:     { type: [string, 'null'], format: date-time }
+        createdAt:         { type: string, format: date-time }
+        updatedAt:         { type: string, format: date-time }
+
+    PendingStaffRequest:
+      type: object
+      required: [id, fullName, username, requestedRole, requestedAt]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        fullName:      { type: string }
+        username:      { type: string }
+        requestedRole: { type: string, enum: [waiter, chef, cashier] }
+        requestedAt:   { type: string, format: date-time }
+
+    # ===========================================================
+    # Restaurant + tables + menu
+    # ===========================================================
+
+    Restaurant:
+      type: object
+      required: [id, name, slug, cuisine, priceLevel, status, address, location, contact, rating, amenities, tier, createdAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:         { type: string, example: Sakura Omakase }
+        slug:         { type: string, example: sakura-omakase-gangnam }
+        cuisine:
+          type: array
+          items: { type: string }
+          example: [japanese, omakase]
+        priceLevel:   { type: integer, enum: [1, 2, 3, 4] }
+        description:  { type: string }
+        status:       { type: string, enum: [pending_approval, active, suspended] }
+        thumbnailUrl: { type: [string, 'null'], format: uri-reference }
+        imageUrls:
+          type: array
+          items: { type: string, format: uri-reference }
+        address:      { $ref: '#/components/schemas/Address' }
+        location:     { $ref: './common.yaml#/components/schemas/GeoPoint' }
+        contact:
+          type: object
+          properties:
+            primaryPhone: { type: string }
+            websiteUrl:   { type: string, format: uri-reference }
+        rating:
+          type: object
+          required: [average, count]
+          properties:
+            average: { type: number, minimum: 0, maximum: 5 }
+            count:   { type: integer, minimum: 0 }
+        amenities:
+          type: array
+          items: { type: string }
+        flags:
+          type: object
+          properties:
+            isNew:           { type: boolean }
+            isCatchOnly:     { type: boolean }
+            isEditorChoice:  { type: boolean }
+        tier:         { type: string, enum: [free, pro, ultra] }
+        settings:     { $ref: '#/components/schemas/RestaurantSettings' }
+        phones:
+          type: array
+          items: { $ref: '#/components/schemas/RestaurantPhone' }
+        floors:
+          type: array
+          items: { $ref: '#/components/schemas/Floor' }
+        menu:         { $ref: '#/components/schemas/Menu' }
+        depositCards:
+          type: array
+          items: { $ref: '#/components/schemas/DepositCard' }
+        pendingStaff:
+          type: array
+          items: { $ref: '#/components/schemas/PendingStaffRequest' }
+        createdAt:    { type: string, format: date-time }
+        updatedAt:    { type: string, format: date-time }
+        deletedAt:    { type: [string, 'null'], format: date-time }
+
+    Address:
+      type: object
+      required: [line1, city, country]
+      properties:
+        line1:      { type: string }
+        line2:      { type: string }
+        city:       { type: string }
+        state:      { type: string }
+        country:    { type: string, example: KR }
+        postalCode: { type: string }
+
+    RestaurantSettings:
+      type: object
+      required: [general, security, features]
+      properties:
+        general:
+          type: object
+          required: [deposit, gracePeriodMinutes, operatingHours]
+          properties:
+            deposit:
+              type: object
+              required: [moneyType, amountPerGuest]
+              properties:
+                moneyType:      { type: string, enum: [domestic, foreign] }
+                amountPerGuest: { $ref: './common.yaml#/components/schemas/Money' }
+            gracePeriodMinutes: { type: integer, minimum: 0, maximum: 240 }
+            operatingHours:
+              type: array
+              items: { $ref: '#/components/schemas/OperatingHours' }
+        security:
+          type: object
+          required: [passwordPolicy, notificationsMuted]
+          properties:
+            passwordPolicy:
+              type: object
+              required: [minLength, requireUppercase, requireNumber]
+              properties:
+                minLength:        { type: integer, minimum: 6, maximum: 64 }
+                requireUppercase: { type: boolean }
+                requireNumber:    { type: boolean }
+            notificationsMuted: { type: boolean }
+        features:
+          type: object
+          properties:
+            reservations: { type: boolean }
+            qrPay:        { type: boolean }
+            delivery:     { type: boolean }
+
+    OperatingHours:
+      type: object
+      required: [day, open, close]
+      properties:
+        day:    { type: integer, minimum: 0, maximum: 6, description: '0=Sun ... 6=Sat' }
+        open:   { type: string, example: '18:00', pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        close:  { type: string, example: '23:00', pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        closed: { type: boolean }
+
+    RestaurantPhone:
+      type: object
+      required: [id, label, phone, isPrimary, addedAt]
+      properties:
+        id:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        label:     { type: string, enum: [main, reservation, kitchen, support, other] }
+        phone:     { type: string, example: '+8225551234' }
+        isPrimary: { type: boolean }
+        addedAt:   { type: string, format: date-time }
+
+    Floor:
+      type: object
+      required: [id, name, sortOrder, isPublished]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:         { type: string, example: Main }
+        sortOrder:    { type: integer, minimum: 0 }
+        isPublished:  { type: boolean }
+        deletedAt:    { type: [string, 'null'], format: date-time }
+
+    Menu:
+      type: object
+      required: [categories, items]
+      properties:
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/MenuCategory' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MenuItem' }
+
+    MenuCategory:
+      type: object
+      required: [id, name, sortOrder, isActive, subcategories]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:          { type: string }
+        iconUrl:       { type: string, format: uri-reference }
+        sortOrder:     { type: integer }
+        isActive:      { type: boolean }
+        subcategories:
+          type: array
+          items: { $ref: '#/components/schemas/MenuSubcategory' }
+
+    MenuSubcategory:
+      type: object
+      required: [id, name, sortOrder, isActive]
+      properties:
+        id:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:      { type: string }
+        sortOrder: { type: integer }
+        isActive:  { type: boolean }
+
+    MenuItem:
+      type: object
+      required: [id, categoryId, name, price, pool, modifiers, availability, isActive, createdAt]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        categoryId:    { $ref: './common.yaml#/components/schemas/ObjectId' }
+        subcategoryId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:          { type: string }
+        shortName:     { type: string }
+        description:   { type: string }
+        imageUrl:      { type: string, format: uri-reference }
+        tags:
+          type: array
+          items: { type: string }
+        price:         { $ref: './common.yaml#/components/schemas/Money' }
+        pool:          { type: string, enum: [domestic, foreign, either] }
+        modifiers:
+          type: array
+          items: { $ref: '#/components/schemas/MenuModifier' }
+        availability:
+          type: object
+          required: [isAvailable]
+          properties:
+            isAvailable:   { type: boolean }
+            soldOutUntil:  { type: [string, 'null'], format: date-time }
+        stats:
+          type: object
+          properties:
+            soldCount30d: { type: integer, minimum: 0 }
+            revenue30d:   { $ref: './common.yaml#/components/schemas/Money' }
+        isActive:      { type: boolean }
+        deletedAt:     { type: [string, 'null'], format: date-time }
+        createdAt:     { type: string, format: date-time }
+        updatedAt:     { type: string, format: date-time }
+
+    MenuModifier:
+      type: object
+      required: [id, name, priceDelta, selectionType, isRequired, sortOrder, isActive]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:          { type: string }
+        priceDelta:    { $ref: './common.yaml#/components/schemas/Money' }
+        group:         { type: string }
+        selectionType: { type: string, enum: [single, multi] }
+        isRequired:    { type: boolean }
+        sortOrder:     { type: integer }
+        isActive:      { type: boolean }
+
+    DepositCard:
+      type: object
+      required: [id, pspProvider, brand, last4, expMonth, expYear, isDefault, registrationMode, addedAt]
+      properties:
+        id:               { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pspProvider:      { type: string }
+        pspExternalId:    { type: string }
+        brand:            { type: string }
+        last4:            { type: string, pattern: '^[0-9]{4}$' }
+        expMonth:         { type: integer, minimum: 1, maximum: 12 }
+        expYear:          { type: integer, minimum: 2000 }
+        isDefault:        { type: boolean }
+        registrationMode: { type: string, enum: [scan, type] }
+        createdBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        addedAt:          { type: string, format: date-time }
+        deletedAt:        { type: [string, 'null'], format: date-time }
+
+    Table:
+      type: object
+      required: [id, restaurantId, floorId, name, seats, shape, size, position, z, status, createdAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        floorId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:         { type: string, example: P1 }
+        seats:        { type: integer, minimum: 1, maximum: 30 }
+        shape:        { type: string, enum: [circle, square, rect, custom] }
+        size:
+          type: object
+          required: [w, h]
+          properties:
+            w: { type: integer, minimum: 1 }
+            h: { type: integer, minimum: 1 }
+        position:
+          type: object
+          required: [x, y]
+          properties:
+            x: { type: integer }
+            y: { type: integer }
+        z:            { type: integer }
+        status:       { type: string, enum: [available, reserved, occupied, needs_cleaning, out_of_service] }
+        occupancy:
+          type: [object, 'null']
+          properties:
+            reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+            orderId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+            seatedAt:      { type: string, format: date-time }
+            partySize:     { type: integer, minimum: 1 }
+        qrCode:
+          type: [object, 'null']
+          properties:
+            payload:         { type: string }
+            payloadHash:     { type: string }
+            rotationVersion: { type: integer, minimum: 1 }
+            validFrom:       { type: string, format: date-time }
+            validUntil:      { type: [string, 'null'], format: date-time }
+            issuedBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        createdAt:    { type: string, format: date-time }
+        updatedAt:    { type: string, format: date-time }
+        deletedAt:    { type: [string, 'null'], format: date-time }
+
+    # ===========================================================
+    # Reservations
+    # ===========================================================
+
+    Reservation:
+      type: object
+      required: [id, restaurantId, userId, confirmationCode, partySize, date, time, contact, occasion, preferences, deposit, status, invites, timeline, createdAt]
+      properties:
+        id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+        userId:             { $ref: './common.yaml#/components/schemas/ObjectId' }
+        confirmationCode:   { type: string, example: 'CT-2026-0425A' }
+        partySize:          { type: integer, minimum: 1, maximum: 20 }
+        date:               { type: string, format: date }
+        time:               { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$', example: '11:00' }
+        seating:            { type: [string, 'null'] }
+        contact:
+          type: object
+          required: [fullName, phone]
+          properties:
+            fullName: { type: string }
+            phone:    { type: string }
+        occasion:           { type: string, enum: [anniversary, birthday, date_night, business, casual, celebration] }
+        specialRequests:    { type: string }
+        preferences:        { $ref: '#/components/schemas/ReservationPreferences' }
+        deposit:            { $ref: './common.yaml#/components/schemas/Money' }
+        paymentId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        refundId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        tableId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        status:
+          type: string
+          enum: [requested, confirmed, declined, arrived, dining, bill_requested, bill, visited, cancelled, no_show]
+        invites:
+          type: array
+          items: { $ref: '#/components/schemas/ReservationInvite' }
+        timeline:
+          type: array
+          items: { $ref: '#/components/schemas/ReservationTimelineEntry' }
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReservationRating'
+            - { type: 'null' }
+        ratingComment:      { type: [string, 'null'] }
+        pointsEarned:       { type: integer, minimum: 0 }
+        createdAt:          { type: string, format: date-time }
+        updatedAt:          { type: string, format: date-time }
+        cancelledAt:        { type: [string, 'null'], format: date-time }
+        cancelReason:       { type: [string, 'null'] }
+
+    ReservationRating:
+      type: object
+      properties:
+        overall:      { type: [number, 'null'], minimum: 0, maximum: 5 }
+        taste:        { type: [number, 'null'], minimum: 0, maximum: 5 }
+        ambience:     { type: [number, 'null'], minimum: 0, maximum: 5 }
+        service:      { type: [number, 'null'], minimum: 0, maximum: 5 }
+        valueOfPrice: { type: [number, 'null'], minimum: 0, maximum: 5, description: 'Value-for-price score.' }
+
+    ReservationPreferences:
+      type: object
+      required: [seating, cuisine, vibe, amenities]
+      properties:
+        seating:   { type: array, items: { type: string } }
+        cuisine:   { type: array, items: { type: string } }
+        vibe:      { type: array, items: { type: string } }
+        amenities: { type: array, items: { type: string } }
+
+    ReservationInvite:
+      type: object
+      required: [id, inviteeUserId, status, invitedAt, expiresAt]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        inviteeUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        status:        { type: string, enum: [pending, accepted, declined, expired] }
+        invitedAt:     { type: string, format: date-time }
+        decidedAt:     { type: string, format: date-time }
+        expiresAt:     { type: string, format: date-time }
+
+    ReservationTimelineEntry:
+      type: object
+      required: [at, type]
+      properties:
+        at:   { type: string, format: date-time }
+        type:
+          type: string
+          enum: [requested, approved, declined, checked_in, order_opened, bill_requested, bill_finalized, paid, cancelled_by_user, cancelled_by_restaurant, no_show]
+        actor:
+          type: object
+          properties:
+            kind: { type: string, enum: [customer, staff, system] }
+            id:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        note: { type: string }
+
+    ReservationDraft:
+      type: object
+      required: [restaurantId, step, expiresAt, updatedAt]
+      properties:
+        restaurantId:    { $ref: './common.yaml#/components/schemas/ObjectId' }
+        step:            { type: integer, enum: [1, 2, 3, 4] }
+        partySize:       { type: integer, minimum: 1, maximum: 20 }
+        date:            { type: string, format: date }
+        time:            { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        seating:         { type: string }
+        occasion:        { type: string }
+        specialRequests: { type: string }
+        preferences:     { $ref: '#/components/schemas/ReservationPreferences' }
+        contact:
+          type: object
+          properties:
+            fullName: { type: string }
+            phone:    { type: string }
+        paymentIntentId: { type: string }
+        expiresAt:       { type: string, format: date-time }
+        updatedAt:       { type: string, format: date-time }
+
+    AvailabilitySlot:
+      type: object
+      required: [date, time, available, partySizeUpTo]
+      properties:
+        date:           { type: string, format: date }
+        time:           { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        available:      { type: boolean }
+        partySizeUpTo:  { type: integer, minimum: 1 }
+
+    # ===========================================================
+    # Orders
+    # ===========================================================
+
+    Order:
+      type: object
+      required: [id, restaurantId, floorId, tableId, openedBy, openedAt, totals, itemCount, draftItemCount, status, paymentIds, items, createdAt]
+      properties:
+        id:               { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+        floorId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        tableId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reservationId:    { $ref: './common.yaml#/components/schemas/ObjectId' }
+        openedBy:         { $ref: './common.yaml#/components/schemas/ObjectId' }
+        openedAt:         { type: string, format: date-time }
+        closedAt:         { type: [string, 'null'], format: date-time }
+        partySize:        { type: integer, minimum: 1 }
+        guestUserIds:
+          type: array
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        totals:
+          type: object
+          required: [domestic, foreign]
+          properties:
+            domestic: { $ref: './common.yaml#/components/schemas/Money' }
+            foreign:  { $ref: './common.yaml#/components/schemas/Money' }
+        itemCount:        { type: integer, minimum: 0 }
+        draftItemCount:   { type: integer, minimum: 0 }
+        bill:             { $ref: '#/components/schemas/OrderBill' }
+        status:           { type: string, enum: [open, bill_requested, bill, paid, voided] }
+        paymentIds:
+          type: array
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        notes:            { type: string }
+        createdAt:        { type: string, format: date-time }
+        updatedAt:        { type: string, format: date-time }
+
+    OrderBill:
+      type: object
+      required: [subtotal, taxRate, tax, tip, total]
+      properties:
+        subtotal:     { $ref: './common.yaml#/components/schemas/Money' }
+        taxRate:      { type: number, minimum: 0, maximum: 1 }
+        tax:          { $ref: './common.yaml#/components/schemas/Money' }
+        tipRate:      { type: number, minimum: 0, maximum: 1 }
+        tip:          { $ref: './common.yaml#/components/schemas/Money' }
+        total:        { $ref: './common.yaml#/components/schemas/Money' }
+        finalizedAt:  { type: string, format: date-time }
+        finalizedBy:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+
+    OrderItem:
+      type: object
+      required: [id, menuItemId, snapshot, qty, modifiers, chefStatus, addedBy, addedAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        menuItemId:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        snapshot:
+          type: object
+          required: [name, price, pool]
+          properties:
+            name:      { type: string }
+            shortName: { type: string }
+            price:     { $ref: './common.yaml#/components/schemas/Money' }
+            pool:      { type: string, enum: [domestic, foreign, either] }
+        qty:          { type: integer, minimum: 1, maximum: 99 }
+        modifiers:
+          type: array
+          items:
+            type: object
+            required: [modifierId, name, priceDelta]
+            properties:
+              modifierId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+              name:       { type: string }
+              priceDelta: { $ref: './common.yaml#/components/schemas/Money' }
+        note:         { type: string }
+        chefStatus:   { type: string, enum: [draft, sent, in_progress, ready, voided] }
+        sendBatchId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        sentAt:       { type: string, format: date-time }
+        acceptedBy:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        acceptedAt:   { type: string, format: date-time }
+        completedBy:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        completedAt:  { type: string, format: date-time }
+        addedBy:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        addedAt:      { type: string, format: date-time }
+        voidedBy:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+        voidedAt:     { type: [string, 'null'], format: date-time }
+        voidReason:   { type: [string, 'null'] }
+
+    ChefBatchView:
+      description: Derived view of items grouped by `sendBatchId`. Powered by `orders.items[]` aggregation.
+      type: object
+      required: [orderId, batchId, restaurantId, tableId, items, status, sentAt]
+      properties:
+        orderId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        batchId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        floorId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        tableId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        tableName:    { type: string }
+        sentAt:       { type: string, format: date-time }
+        status:       { type: string, enum: [sent, in_progress, ready, mixed], description: 'mixed = some items ready, others not.' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+
+    # ===========================================================
+    # Payments
+    # ===========================================================
+
+    Payment:
+      type: object
+      required: [id, purpose, payer, method, amount, pool, status, capturedAt, refunds, netAmount, createdAt]
+      properties:
+        id:                       { $ref: './common.yaml#/components/schemas/ObjectId' }
+        groupId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        purpose:                  { type: string, enum: [reservation_deposit, order_bill, wallet_top_up, subscription] }
+        reservationId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        topUpId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        subscriptionId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        subscriptionInvoiceIndex: { type: integer, minimum: 0 }
+        payer:                    { $ref: '#/components/schemas/Payer' }
+        receivedBy:               { $ref: './common.yaml#/components/schemas/ObjectId' }
+        method:                   { $ref: '#/components/schemas/PaymentExecutedMethod' }
+        intent:                   { $ref: '#/components/schemas/PaymentIntentRecord' }
+        amount:                   { $ref: './common.yaml#/components/schemas/Money' }
+        pool:                     { type: string, enum: [domestic, foreign] }
+        status:                   { type: string, enum: [succeeded, voided] }
+        capturedAt:               { type: string, format: date-time }
+        voidedAt:                 { type: [string, 'null'], format: date-time }
+        voidReason:               { type: [string, 'null'] }
+        refunds:
+          type: array
+          items: { $ref: '#/components/schemas/PaymentRefund' }
+        netAmount:                { $ref: './common.yaml#/components/schemas/Money' }
+        createdAt:                { type: string, format: date-time }
+
+    Payer:
+      type: object
+      required: [kind]
+      properties:
+        kind:           { type: string, enum: [customer, restaurant] }
+        customerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+
+    PaymentExecutedMethod:
+      oneOf:
+        - type: object
+          required: [kind, tendered, change]
+          properties:
+            kind:     { type: string, enum: [cash] }
+            tendered: { $ref: './common.yaml#/components/schemas/Money' }
+            change:   { $ref: './common.yaml#/components/schemas/Money' }
+        - type: object
+          required: [kind, brand, last4, pspChargeId]
+          properties:
+            kind:        { type: string, enum: [credit] }
+            brand:       { type: string }
+            last4:       { type: string, pattern: '^[0-9]{4}$' }
+            pspChargeId: { type: string }
+        - type: object
+          required: [kind, wallet]
+          properties:
+            kind:                { type: string, enum: [wallet] }
+            wallet:              { type: string, enum: [domestic, foreign, bonus] }
+            walletTransactionId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+      discriminator:
+        propertyName: kind
+        mapping:
+          cash:   '#/components/schemas/PaymentExecutedMethod'
+          credit: '#/components/schemas/PaymentExecutedMethod'
+          wallet: '#/components/schemas/PaymentExecutedMethod'
+
+    PaymentIntentRecord:
+      type: object
+      required: [pspProvider, pspIntentId, statusTimeline]
+      properties:
+        pspProvider:      { type: string }
+        pspIntentId:      { type: string }
+        selectedMethodId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        rawMethodHint:    { type: string, enum: [apple_pay, google_pay, paypal, bank_transfer, card] }
+        statusTimeline:
+          type: array
+          items:
+            type: object
+            required: [at, status]
+            properties:
+              at:     { type: string, format: date-time }
+              status: { type: string, enum: [requires_payment, processing, succeeded, failed, cancelled] }
+              failure:
+                type: object
+                properties:
+                  code:    { type: string }
+                  message: { type: string }
+
+    PaymentRefund:
+      type: object
+      required: [id, amount, reason, status, initiatedBy, requestedAt, updatedAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        amount:       { $ref: './common.yaml#/components/schemas/Money' }
+        reason:       { type: string, enum: [reservation_declined, user_cancelled, no_show_waiver, order_voided, duplicate, other] }
+        pspRefundId:  { type: string }
+        status:       { type: string, enum: [pending, succeeded, failed] }
+        initiatedBy:
+          type: object
+          properties:
+            kind: { type: string, enum: [customer, staff, system] }
+            id:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        failure:
+          type: object
+          properties:
+            code:    { type: string }
+            message: { type: string }
+        refundedAt:   { type: string, format: date-time }
+        requestedAt:  { type: string, format: date-time }
+        updatedAt:    { type: string, format: date-time }
+
+    PaymentIntentResponse:
+      description: Returned by endpoints that need a client-side PSP confirmation step (top-up, deposit, subscription).
+      type: object
+      required: [intentId, pspProvider, clientSecret, amount, currency, status]
+      properties:
+        intentId:      { type: string }
+        pspProvider:   { type: string }
+        clientSecret:  { type: string, description: 'Returned to the client SDK to complete the charge.' }
+        nextAction:
+          type: object
+          description: 'PSP-specific instruction; e.g. 3DS redirect URL.'
+          properties:
+            kind: { type: string }
+            url:  { type: string, format: uri-reference }
+        amount:        { type: string }
+        currency:      { type: string }
+        status:        { type: string, enum: [requires_payment, processing, succeeded, failed, cancelled] }
+
+    # ===========================================================
+    # Wallet ledger
+    # ===========================================================
+
+    WalletTransaction:
+      type: object
+      required: [id, userId, pool, currency, type, direction, amount, balanceAfter, title, occurredAt, createdAt]
+      properties:
+        id:                      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        userId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pool:                    { type: string, enum: [domestic, foreign, bonus] }
+        currency:                { type: string }
+        type:
+          type: string
+          enum: [top_up, top_up_bonus, restaurant_payment, reward_earned, referral_bonus, gift_sent, gift_received, birthday_bonus, daily_bonus, refund, subscription_charge, adjustment]
+        direction:               { type: string, enum: [credit, debit] }
+        amount:                  { $ref: './common.yaml#/components/schemas/Money' }
+        balanceAfter:            { $ref: './common.yaml#/components/schemas/Money' }
+        paymentId:               { $ref: './common.yaml#/components/schemas/ObjectId' }
+        giftId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reservationId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
+        subscriptionId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pointsLedgerId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        dailyBonusDate:          { type: string, format: date }
+        giftCounterpartyUserId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        giftCounterpartyUsernameAtSend: { type: string }
+        giftMessage:             { type: string }
+        title:                   { type: string }
+        description:             { type: string }
+        occurredAt:              { type: string, format: date-time }
+        createdAt:               { type: string, format: date-time }
+
+    PointsLedgerEntry:
+      type: object
+      required: [id, userId, type, direction, points, balanceAfter, occurredAt, createdAt]
+      properties:
+        id:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        userId:              { $ref: './common.yaml#/components/schemas/ObjectId' }
+        type:
+          type: string
+          enum: [reservation_completed, review_bonus, birthday_bonus, referral_bonus, daily_bonus, manual_adjustment, expiration, redemption]
+        direction:           { type: string, enum: [credit, debit] }
+        points:              { type: integer, minimum: 0 }
+        balanceAfter:        { type: integer, minimum: 0 }
+        reservationId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+        giftId:              { $ref: './common.yaml#/components/schemas/ObjectId' }
+        walletTransactionId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        notes:               { type: string }
+        createdBy:
+          type: object
+          properties:
+            kind: { type: string, enum: [system, staff] }
+            id:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        occurredAt:          { type: string, format: date-time }
+        createdAt:           { type: string, format: date-time }
+
+    # ===========================================================
+    # Notifications
+    # ===========================================================
+
+    Notification:
+      type: object
+      required: [id, recipientKind, type, title, body, read, deliveredChannels, createdAt]
+      properties:
+        id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
+        recipientKind:      { type: string, enum: [customer, staff] }
+        customerUserId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+        staffUserId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+        type:               { type: string }
+        title:              { type: string }
+        body:               { type: string }
+        iconHint:           { type: string }
+        target:
+          type: [object, 'null']
+          properties:
+            kind:     { type: string }
+            id:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+            deepLink: { type: string }
+        read:               { type: boolean }
+        readAt:             { type: [string, 'null'], format: date-time }
+        deletedAt:          { type: [string, 'null'], format: date-time }
+        deliveredChannels:
+          type: array
+          items: { type: string, enum: [in_app, push, email, sms] }
+        pushDelivery:
+          type: object
+          properties:
+            sentAt:    { type: string, format: date-time }
+            deviceIds:
+              type: array
+              items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+            failures:
+              type: array
+              items:
+                type: object
+                properties:
+                  deviceId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+                  reason:   { type: string }
+        createdAt:          { type: string, format: date-time }
+        updatedAt:          { type: string, format: date-time }
+
+    # ===========================================================
+    # Subscriptions
+    # ===========================================================
+
+    Subscription:
+      type: object
+      required: [id, product, planCode, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd, invoices, history, createdAt]
+      properties:
+        id:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        product:             { type: string, enum: [restaurant_tier, catchtable_pro] }
+        customerUserId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        planCode:            { type: string }
+        status:              { type: string, enum: [trialing, active, past_due, cancelled, expired] }
+        currentPeriodStart:  { type: string, format: date-time }
+        currentPeriodEnd:    { type: string, format: date-time }
+        cancelAtPeriodEnd:   { type: boolean }
+        cancelledAt:         { type: [string, 'null'], format: date-time }
+        paymentMethodRef:
+          type: object
+          properties:
+            kind:     { type: string, enum: [customer_method, restaurant_deposit_card] }
+            methodId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pspProvider:         { type: string }
+        pspSubscriptionId:   { type: string }
+        invoices:
+          type: array
+          items: { $ref: '#/components/schemas/SubscriptionInvoice' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/SubscriptionHistoryEntry' }
+        createdAt:           { type: string, format: date-time }
+        updatedAt:           { type: string, format: date-time }
+
+    SubscriptionInvoice:
+      type: object
+      required: [id, periodStart, periodEnd, amount, total, status, attemptCount, createdAt, updatedAt]
+      properties:
+        id:                   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        periodStart:          { type: string, format: date-time }
+        periodEnd:            { type: string, format: date-time }
+        amount:               { $ref: './common.yaml#/components/schemas/Money' }
+        taxes:                { $ref: './common.yaml#/components/schemas/Money' }
+        total:                { $ref: './common.yaml#/components/schemas/Money' }
+        status:               { type: string, enum: [open, paid, uncollectible, voided] }
+        paymentId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        walletTransactionId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        attemptCount:         { type: integer, minimum: 0 }
+        nextAttemptAt:        { type: string, format: date-time }
+        failure:
+          type: object
+          properties:
+            code:    { type: string }
+            message: { type: string }
+        createdAt:            { type: string, format: date-time }
+        updatedAt:            { type: string, format: date-time }
+
+    SubscriptionHistoryEntry:
+      type: object
+      required: [at, type]
+      properties:
+        at:    { type: string, format: date-time }
+        type:  { type: string, enum: [created, renewed, upgraded, downgraded, cancelled, reactivated, payment_failed] }
+        fromPlan: { type: string }
+        toPlan:   { type: string }
+        actor:
+          type: object
+          properties:
+            kind: { type: string, enum: [customer, staff, system] }
+            id:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        note:  { type: string }
+
+    # ===========================================================
+    # Support
+    # ===========================================================
+
+    SupportConversation:
+      type: object
+      required: [id, subjectKind, status, channel, messageCount, unreadByUser, unreadByAgent, lastMessageAt, messages, openedAt, createdAt]
+      properties:
+        id:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        subjectKind:         { type: string, enum: [customer, staff] }
+        customerUserId:      { $ref: './common.yaml#/components/schemas/ObjectId' }
+        staffUserId:         { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        topic:               { type: string }
+        subject:             { type: string }
+        status:              { type: string, enum: [open, pending_user, pending_agent, resolved, closed] }
+        priority:            { type: string, enum: [low, normal, high, urgent] }
+        channel:             { type: string, enum: [in_app_chat, email, phone] }
+        assignedAgentId:     { type: string }
+        context:
+          type: object
+          properties:
+            reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+            orderId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
+            paymentId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+            articleSlug:   { type: string }
+        messageCount:        { type: integer, minimum: 0 }
+        unreadByUser:        { type: integer, minimum: 0 }
+        unreadByAgent:       { type: integer, minimum: 0 }
+        lastMessageAt:       { type: string, format: date-time }
+        lastMessagePreview:  { type: string }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/SupportMessage' }
+        openedAt:            { type: string, format: date-time }
+        resolvedAt:          { type: [string, 'null'], format: date-time }
+        closedAt:            { type: [string, 'null'], format: date-time }
+        rating:              { type: integer, minimum: 1, maximum: 5 }
+        ratingComment:       { type: string }
+        createdAt:           { type: string, format: date-time }
+        updatedAt:           { type: string, format: date-time }
+
+    SupportMessage:
+      type: object
+      required: [id, senderKind, body, sentAt]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        senderKind:   { type: string, enum: [user, agent, system] }
+        senderId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+        body:         { type: string, maxLength: 8000 }
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              kind:     { type: string, enum: [image, file] }
+              url:      { type: string, format: uri-reference }
+              mime:     { type: string }
+              size:     { type: integer, minimum: 0 }
+              filename: { type: string }
+        readByUserAt:  { type: string, format: date-time }
+        readByAgentAt: { type: string, format: date-time }
+        sentAt:        { type: string, format: date-time }
+
+    # ===========================================================
+    # Metadata
+    # ===========================================================
+
+    MetadataDoc:
+      type: object
+      required: [id, version, items]
+      properties:
+        id:          { type: string, example: reward_tiers }
+        description: { type: string }
+        version:     { type: integer, minimum: 1 }
+        items:
+          type: array
+          items: {}
+        updatedBy:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        createdAt:   { type: string, format: date-time }
+        updatedAt:   { type: string, format: date-time }
+
+    # ===========================================================
+    # Discovery DTOs
+    # ===========================================================
+
+    DiscoverHome:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          items:
+            type: object
+            required: [kind, title]
+            properties:
+              kind:  { type: string, enum: [hero_banner, near_me, top_rated, editor_picks, new_in_town, weekly_picks, flash_deals, your_favorites, recently_viewed] }
+              title: { type: string }
+              items:
+                type: array
+                items: { $ref: '#/components/schemas/RestaurantCard' }
+
+    RestaurantCard:
+      description: Lightweight restaurant projection for grids and search results.
+      type: object
+      required: [id, name, slug, cuisine, priceLevel, rating, address, location]
+      properties:
+        id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        name:         { type: string }
+        slug:         { type: string }
+        cuisine:      { type: array, items: { type: string } }
+        priceLevel:   { type: integer, enum: [1, 2, 3, 4] }
+        thumbnailUrl: { type: string, format: uri-reference }
+        rating:
+          type: object
+          properties:
+            average: { type: number }
+            count:   { type: integer }
+        address:      { $ref: '#/components/schemas/Address' }
+        location:     { $ref: './common.yaml#/components/schemas/GeoPoint' }
+        distanceMeters: { type: number, description: 'Filled when query has near=lat,lng.' }
+        flags:
+          type: object
+          properties:
+            isNew:          { type: boolean }
+            isCatchOnly:    { type: boolean }
+            isEditorChoice: { type: boolean }
+        amenities:    { type: array, items: { type: string } }
+
+    PublicRestaurant:
+      description: Public restaurant view; no settings, no pendingStaff.
+      allOf:
+        - $ref: '#/components/schemas/Restaurant'
+        - type: object
+          properties:
+            settings: { readOnly: true }
+            pendingStaff: { readOnly: true }
+            depositCards: { readOnly: true }
+            phones: { readOnly: true }
+
+    # ===========================================================
+    # Auth DTOs
+    # ===========================================================
+
+    AuthTokens:
+      type: object
+      required: [accessToken, refreshToken, accessTokenExpiresAt]
+      properties:
+        accessToken:         { type: string }
+        refreshToken:        { type: string }
+        accessTokenExpiresAt:  { type: string, format: date-time }
+        refreshTokenExpiresAt: { type: string, format: date-time }
+        tokenType:           { type: string, enum: [Bearer], default: Bearer }
+
+    AuthCustomerResponse:
+      type: object
+      required: [tokens, user]
+      properties:
+        tokens: { $ref: '#/components/schemas/AuthTokens' }
+        user:   { $ref: '#/components/schemas/CustomerUser' }
+
+    AuthStaffResponse:
+      type: object
+      required: [tokens, user, restaurant]
+      properties:
+        tokens:     { $ref: '#/components/schemas/AuthTokens' }
+        user:       { $ref: '#/components/schemas/StaffUser' }
+        restaurant:
+          description: 'Brief restaurant projection so POS can render header without an extra round-trip.'
+          type: object
+          required: [id, name, status, tier]
+          properties:
+            id:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+            name:   { type: string }
+            status: { type: string, enum: [pending_approval, active, suspended] }
+            tier:   { type: string, enum: [free, pro, ultra] }
+
+    SignUpSecurityAnswer:
+      type: object
+      required: [questionId, answer]
+      properties:
+        questionId: { type: string, description: 'metadata.security_questions.items[].code' }
+        answer:     { type: string, minLength: 1, maxLength: 256 }
+
+    # ===========================================================
+    # Analytics DTOs
+    # ===========================================================
+
+    AnalyticsBucket:
+      type: object
+      required: [bucketStart, value]
+      properties:
+        bucketStart: { type: string, format: date-time }
+        value:       { type: number }
+        valueMoney:  { $ref: './common.yaml#/components/schemas/Money' }
+
+    SalesDashboard:
+      type: object
+      required: [from, to, totals, dailyRevenue, topItems, hourlyHeatmap]
+      properties:
+        from: { type: string, format: date-time }
+        to:   { type: string, format: date-time }
+        totals:
+          type: object
+          properties:
+            revenueDomestic: { $ref: './common.yaml#/components/schemas/Money' }
+            revenueForeign:  { $ref: './common.yaml#/components/schemas/Money' }
+            ordersCount:     { type: integer, minimum: 0 }
+            guestsCount:     { type: integer, minimum: 0 }
+            avgTicketDomestic: { $ref: './common.yaml#/components/schemas/Money' }
+            avgTicketForeign:  { $ref: './common.yaml#/components/schemas/Money' }
+        dailyRevenue:
+          type: array
+          items: { $ref: '#/components/schemas/AnalyticsBucket' }
+        hourlyHeatmap:
+          type: array
+          items:
+            type: object
+            properties:
+              dayOfWeek: { type: integer, minimum: 0, maximum: 6 }
+              hour:      { type: integer, minimum: 0, maximum: 23 }
+              orders:    { type: integer, minimum: 0 }
+        topItems:
+          type: array
+          items:
+            type: object
+            properties:
+              menuItemId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
+              name:           { type: string }
+              soldCount:      { type: integer, minimum: 0 }
+              revenue:        { $ref: './common.yaml#/components/schemas/Money' }
+
+    RevenueAnalysis:
+      type: object
+      required: [from, to, buckets]
+      properties:
+        from:   { type: string, format: date-time }
+        to:     { type: string, format: date-time }
+        granularity: { type: string, enum: [hour, day, week, month] }
+        pool:        { type: string, enum: [domestic, foreign, both], default: both }
+        buckets:
+          type: array
+          items: { $ref: '#/components/schemas/AnalyticsBucket' }
+
+    MenuAnalysis:
+      type: object
+      required: [from, to, items]
+      properties:
+        from:  { type: string, format: date-time }
+        to:    { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              menuItemId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+              name:       { type: string }
+              soldCount:  { type: integer, minimum: 0 }
+              revenue:    { $ref: './common.yaml#/components/schemas/Money' }
+              voidCount:  { type: integer, minimum: 0 }
+              avgPrepSec: { type: integer, minimum: 0 }
+
+    CustomerAnalysis:
+      type: object
+      required: [from, to, totals, segments]
+      properties:
+        from: { type: string, format: date-time }
+        to:   { type: string, format: date-time }
+        totals:
+          type: object
+          properties:
+            uniqueGuests:   { type: integer, minimum: 0 }
+            repeatGuests:   { type: integer, minimum: 0 }
+            avgPartySize:   { type: number }
+            avgVisitsPerGuest: { type: number }
+        segments:
+          type: array
+          items:
+            type: object
+            properties:
+              tier:           { type: string }
+              guests:         { type: integer }
+              revenueShare:   { type: number }
+
+    HistoryRow:
+      type: object
+      required: [at, kind, summary]
+      properties:
+        at:        { type: string, format: date-time }
+        kind:      { type: string, enum: [reservation, order, payment, refund] }
+        summary:   { type: string }
+        amount:    { $ref: './common.yaml#/components/schemas/Money' }
+        actorId:   { $ref: './common.yaml#/components/schemas/ObjectId' }
+        targetId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+
+    HistoryReceipt:
+      type: object
+      required: [paymentId, capturedAt, payer, items, total]
+      properties:
+        paymentId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        capturedAt: { type: string, format: date-time }
+        payer:      { $ref: '#/components/schemas/Payer' }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              name:    { type: string }
+              qty:     { type: integer }
+              price:   { $ref: './common.yaml#/components/schemas/Money' }
+              total:   { $ref: './common.yaml#/components/schemas/Money' }
+        subtotal:   { $ref: './common.yaml#/components/schemas/Money' }
+        tax:        { $ref: './common.yaml#/components/schemas/Money' }
+        tip:        { $ref: './common.yaml#/components/schemas/Money' }
+        total:      { $ref: './common.yaml#/components/schemas/Money' }
+        method:     { $ref: '#/components/schemas/PaymentExecutedMethod' }

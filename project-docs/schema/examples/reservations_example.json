@@ -1,0 +1,90 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000e0001" },
+    "restaurantId": { "$oid": "65f0000000000000000b0001" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "confirmationCode": "CT-2026-0425A",
+    "partySize": 2,
+    "date": "2026-04-25",
+    "time": "11:00",
+    "seating": "Indoor",
+    "contact": { "fullName": "Sarah Kim", "phone": "+8210123456789" },
+    "occasion": "anniversary",
+    "specialRequests": "Two glasses of sake, please. We're celebrating!",
+    "preferences": {
+      "seating":   ["indoor", "private"],
+      "cuisine":   ["japanese"],
+      "vibe":      ["romantic"],
+      "amenities": ["wifi"]
+    },
+    "deposit":    { "amount": { "$numberDecimal": "60000" }, "currency": "KRW" },
+    "paymentId": { "$oid": "65f0000000000000000e0010" },
+    "refundId":  null,
+    "tableId":   { "$oid": "65f0000000000000000d0001" },
+    "orderId":   { "$oid": "65f0000000000000000a1001" },
+    "status": "dining",
+    "invites": [
+      {
+        "_id": { "$oid": "65f0000000000000000e1001" },
+        "inviteeUserId": { "$oid": "65f0000000000000000c0002" },
+        "status": "accepted",
+        "invitedAt":  { "$date": "2026-04-22T18:00:00.000Z" },
+        "decidedAt":  { "$date": "2026-04-22T19:32:00.000Z" },
+        "expiresAt":  { "$date": "2026-04-25T11:00:00.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000e1002" },
+        "inviteeUserId": { "$oid": "65f0000000000000000c0003" },
+        "status": "pending",
+        "invitedAt":  { "$date": "2026-04-23T10:00:00.000Z" },
+        "expiresAt":  { "$date": "2026-04-25T11:00:00.000Z" }
+      }
+    ],
+    "timeline": [
+      { "at": { "$date": "2026-04-22T17:50:00.000Z" }, "type": "requested",   "actor": { "kind": "customer", "id": { "$oid": "65f0000000000000000c0001" } } },
+      { "at": { "$date": "2026-04-22T17:51:00.000Z" }, "type": "approved",    "actor": { "kind": "system" } },
+      { "at": { "$date": "2026-04-25T11:00:00.000Z" }, "type": "checked_in",  "actor": { "kind": "staff",    "id": { "$oid": "65f0000000000000000a0001" } }, "note": "QR scan from table P1" },
+      { "at": { "$date": "2026-04-25T11:01:00.000Z" }, "type": "order_opened","actor": { "kind": "staff",    "id": { "$oid": "65f0000000000000000a0001" } } }
+    ],
+    "rating": null,
+    "ratingComment": null,
+    "pointsEarned": 0,
+    "createdAt": { "$date": "2026-04-22T17:50:00.000Z" },
+    "updatedAt": { "$date": "2026-04-25T11:01:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000e0002" },
+    "restaurantId": { "$oid": "65f0000000000000000b0001" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "confirmationCode": "CT-2026-0418A",
+    "partySize": 4,
+    "date": "2026-04-18",
+    "time": "19:00",
+    "seating": "Indoor",
+    "contact": { "fullName": "Sarah Kim", "phone": "+8210123456789" },
+    "occasion": "casual",
+    "preferences": { "seating": ["indoor"], "cuisine": ["japanese"], "vibe": [], "amenities": [] },
+    "deposit":    { "amount": { "$numberDecimal": "120000" }, "currency": "KRW" },
+    "paymentId": null,
+    "refundId":  null,
+    "status": "visited",
+    "invites": [],
+    "timeline": [
+      { "at": { "$date": "2026-04-15T14:00:00.000Z" }, "type": "requested" },
+      { "at": { "$date": "2026-04-15T14:01:00.000Z" }, "type": "approved" },
+      { "at": { "$date": "2026-04-18T10:05:00.000Z" }, "type": "checked_in" },
+      { "at": { "$date": "2026-04-18T12:01:00.000Z" }, "type": "paid" }
+    ],
+    "rating": {
+      "overall": 5,
+      "taste": 5,
+      "ambience": 4,
+      "service": 5,
+      "valueOfPrice": 4
+    },
+    "ratingComment": "Best omakase in Seoul.",
+    "pointsEarned": 50,
+    "createdAt": { "$date": "2026-04-15T14:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-18T12:01:00.000Z" }
+  }
+]

@@ -1,0 +1,35 @@
+sequenceDiagram
+%% Three method modes. The bill must be finalized first. Currencies are
+%% independent (KRW + USD); both must be fully covered before status flips.
+    autonumber
+    actor Cs as Cashier
+    actor Guest
+    participant App as POS app
+    participant API as API
+    participant PSP as PSP (Stripe / Toss)
+
+    Cs->>App: tap "Pay" on bill
+    App->>API: POST /pos/orders/{oid}/payments<br/>{ method, ...amounts }<br/>Idempotency-Key
+
+    alt method = cash
+        Note over App,API: cashier inputs `received` per currency
+        API->>API: validate `received >= due`<br/>else tendered_too_low
+        API-->>App: 200 payment.status=succeeded
+    else method = credit
+        API->>PSP: create checkout (KRW + USD)
+        PSP-->>App: qrUrl + paymentIntentId
+        App-->>Guest: show QR
+        Guest-->>PSP: pays
+        PSP-->>API: webhook intent.succeeded
+        API->>API: payment.status=succeeded
+        API-->>App: ws payment.captured
+    else method = mix
+        Note over App,API: cash portion + credit portion per currency<br/>cash + credit must equal due else mix_total_mismatch
+        API->>PSP: credit half only
+        PSP-->>API: webhook (succeeded / failed)
+        API-->>App: 200 / 402 payment_declined
+    else wallet (subscription/top-up)
+        API->>API: debit wallet pool · ledger entry<br/>else wallet_insufficient_balance
+    end
+
+    API-->>App: order.status=paid · table.updated → available

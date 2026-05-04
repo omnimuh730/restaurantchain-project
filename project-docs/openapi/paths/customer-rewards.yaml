@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Rewards'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-rewards` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-rewards.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me/rewards:
+    get: { $ref: '#/x-operations/GetRewards' }
+  /me/rewards/points-ledger:
+    get: { $ref: '#/x-operations/ListPointsLedger' }
+
+x-operations:
+  # Rewards cache + points ledger.
+
+  GetRewards:
+    tags: [Customer · Rewards]
+    operationId: getRewards
+    summary: Read rewards (tier, points, points-to-next-tier).
+    description: |
+      Cheap read backed by `customer_users.rewards` cache. The authoritative source is
+      the `points_ledger` collection.
+    responses:
+      '200':
+        description: Rewards.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/UserRewards' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  ListPointsLedger:
+    tags: [Customer · Rewards]
+    operationId: listPointsLedger
+    summary: List points-ledger entries (cursor pagination).
+    parameters:
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum: [reservation_completed, review_bonus, birthday_bonus, referral_bonus, daily_bonus, manual_adjustment, expiration, redemption, all]
+          default: all
+      - name: direction
+        in: query
+        schema: { type: string, enum: [credit, debit, all], default: all }
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Ledger entries.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/PointsLedgerEntry' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }

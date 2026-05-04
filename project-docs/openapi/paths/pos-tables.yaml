@@ -1,0 +1,315 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Tables'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-tables` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-tables.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/restaurants/{restaurantId}/tables/{tableId}:
+    delete: { $ref: '#/x-operations/DeleteTable' }
+    get: { $ref: '#/x-operations/GetTable' }
+    patch: { $ref: '#/x-operations/UpdateTable' }
+  /pos/restaurants/{restaurantId}/floors/{floorId}/tables:
+    get: { $ref: '#/x-operations/ListTables' }
+    post: { $ref: '#/x-operations/CreateTable' }
+    put: { $ref: '#/x-operations/ReplaceFloorTables' }
+  /pos/restaurants/{restaurantId}/tables/{tableId}/qr-code:rotate:
+    post: { $ref: '#/x-operations/RotateQrCode' }
+  /pos/restaurants/{restaurantId}/tables/{tableId}/status:
+    put: { $ref: '#/x-operations/SetTableStatus' }
+
+x-operations:
+  # Tables: list/create per floor, update, delete, status flips, QR rotation.
+
+  ListTables:
+    tags: [POS · Tables]
+    operationId: posListTables
+    summary: List all tables on a floor (Floor Plan view).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FloorIdPath'
+    responses:
+      '200':
+        description: Tables.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  CreateTable:
+    tags: [POS · Tables]
+    operationId: posCreateTable
+    summary: Create a new table on a floor.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FloorIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, seats, shape, size, position]
+            properties:
+              name:     { type: string, minLength: 1, maxLength: 32 }
+              seats:    { type: integer, minimum: 1, maximum: 30 }
+              shape:    { type: string, enum: [circle, square, rect, custom] }
+              size:
+                type: object
+                required: [w, h]
+                properties:
+                  w: { type: integer, minimum: 1 }
+                  h: { type: integer, minimum: 1 }
+              position:
+                type: object
+                required: [x, y]
+                properties:
+                  x: { type: integer }
+                  y: { type: integer }
+              z: { type: integer, default: 0 }
+    responses:
+      '201':
+        description: Table created.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409':
+        description: Duplicate `name` on the floor.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  ReplaceFloorTables:
+    tags: [POS · Tables]
+    operationId: posReplaceFloorTables
+    summary: Bulk replace all tables on a floor (used by the floor plan editor's Save action).
+    description: |
+      Sends the full new layout. Server diffs against current tables:
+        * Existing tables (matched by `id`) are updated.
+        * New tables (no `id`) are inserted.
+        * Tables not in the request are soft-deleted.
+
+      Operation rejects when any tables to be removed currently host an `occupancy` —
+      those must be cleared first (returns `409 invalid_transition`).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FloorIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [tables]
+            properties:
+              tables:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '../components/schemas.yaml#/components/schemas/Table'
+                    - type: object
+                      properties:
+                        id: { description: 'Optional. Omit to insert.' }
+    responses:
+      '200':
+        description: Updated layout.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                created:  { type: integer, minimum: 0 }
+                updated:  { type: integer, minimum: 0 }
+                deleted:  { type: integer, minimum: 0 }
+                tables:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409':
+        description: Tried to remove an occupied table.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  GetTable:
+    tags: [POS · Tables]
+    operationId: posGetTable
+    summary: Read one table.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/TableIdPath'
+    responses:
+      '200':
+        description: Table.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  UpdateTable:
+    tags: [POS · Tables]
+    operationId: posUpdateTable
+    summary: Update a single table (rename, reposition, resize).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/TableIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:     { type: string }
+              seats:    { type: integer, minimum: 1, maximum: 30 }
+              shape:    { type: string, enum: [circle, square, rect, custom] }
+              size:
+                type: object
+                properties:
+                  w: { type: integer }
+                  h: { type: integer }
+              position:
+                type: object
+                properties:
+                  x: { type: integer }
+                  y: { type: integer }
+              z: { type: integer }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteTable:
+    tags: [POS · Tables]
+    operationId: posDeleteTable
+    summary: Soft-delete a table.
+    description: 'Returns 409 if currently occupied or hosts a future reservation.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/TableIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  SetTableStatus:
+    tags: [POS · Tables]
+    operationId: posSetTableStatus
+    summary: Manually set table status (waiter status flips).
+    description: |
+      Allowed transitions:
+      `available → reserved | occupied | out_of_service`
+      `reserved  → occupied | available`
+      `occupied  → needs_cleaning | available`
+      `needs_cleaning → available | out_of_service`
+      `out_of_service → available`
+
+      Returns `409 invalid_transition` for anything else.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/TableIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status:    { type: string, enum: [available, reserved, occupied, needs_cleaning, out_of_service] }
+              partySize: { type: integer, minimum: 1, description: 'Required when transitioning to `occupied` without an active reservation.' }
+              note:      { type: string, maxLength: 240 }
+    responses:
+      '200':
+        description: New table state.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Invalid transition.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              invalid:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Invalid transition, status: 409, code: invalid_transition, detail: 'cannot go from `out_of_service` to `occupied`' }
+
+  RotateQrCode:
+    tags: [POS · Tables]
+    operationId: posRotateTableQr
+    summary: Rotate the QR code for a table.
+    description: |
+      Increments `qrCode.rotationVersion` and re-issues `payload`/`payloadHash`.  Existing
+      QR scans for the previous version will receive `409 qr_rotated` from the
+      reservation check-in endpoint.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/TableIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              validUntil: { type: [string, 'null'], format: date-time }
+              reason:     { type: string }
+    responses:
+      '200':
+        description: New QR.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table:    { $ref: '../components/schemas.yaml#/components/schemas/Table' }
+                imageUrl: { type: string, format: uri-reference, description: 'PNG render of the new QR.' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }

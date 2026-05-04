@@ -1,0 +1,24 @@
+flowchart TD
+%% Single order document covers draft → sent → bill → paid. Chef tickets are
+%% NOT a separate collection; they are derived from order.batches[] +
+%% order.items[].chefStatus.
+    Open(["POST /pos/restaurants/{rid}/orders<br/>or auto on first item"])
+    Open --> S0["status=open<br/>(no items)"]
+
+    S0 -->|"POST /pos/orders/{oid}/items<br/>(chefStatus=draft)"| S1["open · draft items only"]
+    S1 -->|"PATCH item · DELETE draft item"| S1
+    S1 -->|"POST /pos/orders/{oid}:send-batch<br/>{ itemIds[] }"| S2["open · sent batch<br/>chefStatus=sent"]
+
+    S2 -->|"add more drafts"| S1
+    S2 -->|"PATCH /items/{iid} (already sent) → delta batch"| S2
+    S2 -->|"POST /items/{iid}:void  (cannot_void_after_send if too late)"| S2
+
+    S2 -->|"POST /pos/orders/{oid}:request-bill"| S3["bill_requested"]
+    S3 -->|"POST :finalize-bill"| S4["bill (totals frozen)"]
+    S4 -->|"POST /pos/orders/{oid}/payments  (cash · credit · mix · wallet)"| S5["paid"]
+
+    S2 -->|"POST :void  (manager only)"| Sx["voided"]
+    S3 --> Sx
+
+    S5 --> tableFlip[("table.status<br/>→ available<br/>after takeaway")]
+    style Sx fill:#fee

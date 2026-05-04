@@ -1,0 +1,270 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Discovery'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `discovery` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/discovery.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /discover:
+    get: { $ref: '#/x-operations/GetDiscoverHome' }
+  /restaurants:
+    get: { $ref: '#/x-operations/SearchRestaurants' }
+  /restaurants/suggestions:
+    get: { $ref: '#/x-operations/GetSuggestions' }
+  /restaurants/{restaurantId}:
+    get: { $ref: '#/x-operations/GetPublicRestaurant' }
+  /restaurants/{restaurantId}/availability:
+    get: { $ref: '#/x-operations/GetAvailability' }
+  /restaurants/{restaurantId}/menu:
+    get: { $ref: '#/x-operations/GetPublicMenu' }
+
+x-operations:
+  # Discover home, explorer search/map, public restaurant + menu, availability.
+
+  GetDiscoverHome:
+    tags: [Discovery]
+    operationId: getDiscoverHome
+    summary: Render the Discover landing page (multiple curated sections).
+    description: |
+      Returns the full set of horizontal sections shown on the **Discover** screen
+      (hero banner, near me, top rated, editor's picks, new in town, weekly picks,
+      flash deals, recently viewed, your favorites). Personalized when the request
+      carries a customer token; otherwise returns location-based defaults.
+    security:
+      - publicAuth: []
+    parameters:
+      - name: lat
+        in: query
+        schema: { type: number, format: double }
+      - name: lng
+        in: query
+        schema: { type: number, format: double }
+      - name: areaId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Sections.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/DiscoverHome' }
+      '422':
+        description: Neither location nor areaId provided and unable to infer.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              noLocation:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Location required, status: 422, code: location_required, detail: 'lat,lng or areaId is required' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  SearchRestaurants:
+    tags: [Discovery]
+    operationId: searchRestaurants
+    summary: Search/filter restaurants — used by Explorer search bar, list, and map.
+    description: |
+      A single endpoint that powers all three Explorer projections (search results,
+      map clusters, and the recommended-on-the-bottom-sheet list). Sorting defaults to
+      distance when `near=` is provided.
+
+      Map clients pass `?bbox=west,south,east,north` and `?clusterPrecision` to receive
+      cluster groups instead of individual restaurants for high zoom levels.
+    security:
+      - publicAuth: []
+    parameters:
+      - name: q
+        in: query
+        schema: { type: string, maxLength: 200 }
+        description: Free-text query (name, cuisine, dish hint).
+      - name: cuisine
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string }
+      - name: priceLevel
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: integer, enum: [1, 2, 3, 4] }
+      - name: amenity
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string }
+      - name: open
+        in: query
+        schema: { type: string, enum: [now, today] }
+      - name: near
+        in: query
+        schema:
+          type: string
+          pattern: '^-?[0-9]+(\.[0-9]+)?,-?[0-9]+(\.[0-9]+)?$'
+          description: '`lat,lng`'
+      - name: radiusMeters
+        in: query
+        schema: { type: integer, minimum: 100, maximum: 50000, default: 5000 }
+      - name: bbox
+        in: query
+        schema: { type: string, description: '`west,south,east,north`' }
+      - name: clusterPrecision
+        in: query
+        schema: { type: integer, minimum: 4, maximum: 12 }
+      - name: sort
+        in: query
+        schema: { type: string, enum: [distance, rating, price_asc, price_desc, popularity], default: distance }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Restaurants and/or clusters.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantCard' }
+                    clusters:
+                      type: array
+                      description: 'Returned only when `clusterPrecision` is provided.'
+                      items:
+                        type: object
+                        properties:
+                          cellId:   { type: string }
+                          center:   { $ref: '../components/common.yaml#/components/schemas/GeoPoint' }
+                          count:    { type: integer, minimum: 1 }
+                          sample:   { $ref: '../components/schemas.yaml#/components/schemas/RestaurantCard' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  GetSuggestions:
+    tags: [Discovery]
+    operationId: getSuggestions
+    summary: Autocomplete suggestions for the Explorer search bar.
+    security:
+      - publicAuth: []
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 200 }
+      - name: lat
+        in: query
+        schema: { type: number, format: double }
+      - name: lng
+        in: query
+        schema: { type: number, format: double }
+    responses:
+      '200':
+        description: Suggestions grouped by kind.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restaurants:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantCard' }
+                cuisines:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      code:  { type: string }
+                      label: { type: string }
+                locations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      areaId:  { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                      label:   { type: string }
+                      region:  { type: string }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  GetPublicRestaurant:
+    tags: [Discovery]
+    operationId: getPublicRestaurant
+    summary: Public restaurant page (used by Explorer detail and Reservation step 1 header).
+    security:
+      - publicAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Restaurant.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/PublicRestaurant' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  GetPublicMenu:
+    tags: [Discovery]
+    operationId: getPublicMenu
+    summary: Public menu (sub of GetPublicRestaurant for menu-only screens).
+    security:
+      - publicAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: includeUnavailable
+        in: query
+        schema: { type: boolean, default: false }
+    responses:
+      '200':
+        description: Menu.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Menu' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  GetAvailability:
+    tags: [Discovery]
+    operationId: getAvailability
+    summary: List available dates+times for a restaurant (Reservation step 1 calendar).
+    description: |
+      Returns availability slots for the next `days` (default 14) starting at `from`.
+      Slots are bucketed into the restaurant's reservation cadence (typically 30 min).
+      Slot `available=false` is returned for past times and fully-booked windows so the
+      UI can grey them out.
+    security:
+      - publicAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: from
+        in: query
+        schema: { type: string, format: date }
+      - name: days
+        in: query
+        schema: { type: integer, minimum: 1, maximum: 60, default: 14 }
+      - name: partySize
+        in: query
+        required: true
+        schema: { type: integer, minimum: 1, maximum: 20 }
+    responses:
+      '200':
+        description: Availability slots.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/AvailabilitySlot' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }

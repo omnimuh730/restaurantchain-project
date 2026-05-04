@@ -1,0 +1,37 @@
+sequenceDiagram
+%% Three lanes are derived views, not collections. Every action mutates
+%% order.batches[] / order.items[].chefStatus and broadcasts a ws event.
+    autonumber
+    actor Wt as Waiter (Orders)
+    actor Ch as Chef (Kitchen)
+    participant API as API
+    participant Order as orders[oid]
+
+    Wt->>API: POST /pos/orders/{oid}:send-batch { itemIds[] }
+    API->>Order: append batch (status=sent)<br/>items[*].chefStatus=sent
+    API-->>Ch: ws order.batch.sent → Received lane
+
+    Ch->>API: POST /pos/orders/{oid}/batches/{bid}:accept
+    API->>Order: batch.status=in_progress<br/>items[*].chefStatus=in_progress
+    API-->>Wt: ws order.batch.accepted
+    API-->>Ch: ws order.batch.accepted → In Progress lane
+
+    loop per item
+        Ch->>API: POST /pos/orders/{oid}/items/{iid}:complete
+        API->>Order: item.chefStatus=ready
+        API-->>Wt: ws order.item.updated
+    end
+
+    Note over API,Order: When all non-voided items in a batch are ready,<br/>batch.status=ready (or "mixed" while partial).
+
+    Ch->>API: POST /pos/orders/{oid}/items/{iid}:recall
+    API->>Order: item.chefStatus=in_progress
+    API-->>Wt: ws order.item.updated  ("ready" undone)
+
+    Wt->>API: POST /pos/orders/{oid}/items/{iid}:void
+    alt cannot_void_after_send
+        API-->>Wt: 409 cannot_void_after_send
+    else ok
+        API->>Order: item.chefStatus=voided
+        API-->>Ch: ws order.item.voided  (gray out)
+    end

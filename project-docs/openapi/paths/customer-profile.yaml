@@ -1,0 +1,358 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Profile'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-profile` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-profile.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me:
+    get: { $ref: '#/x-operations/GetMe' }
+    patch: { $ref: '#/x-operations/UpdateMe' }
+  /me/devices:
+    get: { $ref: '#/x-operations/ListDevices' }
+    post: { $ref: '#/x-operations/RegisterDevice' }
+  /me/password:
+    put: { $ref: '#/x-operations/ChangePassword' }
+  /me/payment-methods:
+    get: { $ref: '#/x-operations/ListPaymentMethods' }
+    post: { $ref: '#/x-operations/AddPaymentMethod' }
+  /me/preferences:
+    put: { $ref: '#/x-operations/PutPreferences' }
+  /me/security-answers:
+    put: { $ref: '#/x-operations/PutSecurityAnswers' }
+  /me/devices/{deviceId}:
+    delete: { $ref: '#/x-operations/DeleteDevice' }
+  /me/payment-methods/{methodId}:
+    delete: { $ref: '#/x-operations/DeletePaymentMethod' }
+    patch: { $ref: '#/x-operations/UpdatePaymentMethod' }
+
+x-operations:
+  # /me, security answers, password, payment methods (+ legacy preferences/devices endpoints).
+
+  GetMe:
+    tags: [Customer · Profile]
+    operationId: getMe
+    summary: Read the current customer's full profile.
+    description: |
+      Returns the entire `customer_users` document (without the password hash). This is
+      the single read used by the **Profile** tab and most app bootstrapping calls.
+    responses:
+      '200':
+        description: Profile.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/CustomerUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '500': { $ref: '../components/common.yaml#/components/responses/InternalServerError' }
+
+  UpdateMe:
+    tags: [Customer · Profile]
+    operationId: updateMe
+    summary: Update editable profile fields.
+    description: 'Only fields explicitly listed are accepted. Unknown fields are rejected (422).'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              fullName:    { type: string, minLength: 1, maxLength: 80 }
+              phone:       { type: [string, 'null'] }
+              avatarImg:   { type: [string, 'null'], description: 'Base64 image data URI (e.g. data:image/png;base64,...)' }
+    responses:
+      '200':
+        description: Updated profile.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/CustomerUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '409':
+        description: Phone collision.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  PutPreferences:
+    tags: [Customer · Profile]
+    operationId: putPreferences
+    deprecated: true
+    summary: Replace preferences (theme, locale, location).
+    description: |
+      Deprecated. Preferences are stored locally on the client and this endpoint
+      is kept for backward compatibility only.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [theme]
+            properties:
+              theme:    { type: string, enum: [airbnb, ocean, forest, midnight] }
+              locale:   { type: string }
+              location:
+                type: [object, 'null']
+                properties:
+                  areaId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  lat:    { type: number }
+                  lng:    { type: number }
+                  label:  { type: string }
+    responses:
+      '200':
+        description: Updated preferences.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                storedLocally: { type: boolean, enum: [true] }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  PutSecurityAnswers:
+    tags: [Customer · Profile]
+    operationId: putSecurityAnswers
+    summary: Update the three security questions/answers used by password reset.
+    description: 'Replaces all three answers atomically. Requires the current password.'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [currentPassword, answers]
+            properties:
+              currentPassword: { type: string, format: password }
+              answers:
+                type: array
+                minItems: 3
+                maxItems: 3
+                items: { $ref: '../components/schemas.yaml#/components/schemas/SignUpSecurityAnswer' }
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401':
+        description: Wrong current password.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  ChangePassword:
+    tags: [Customer · Profile]
+    operationId: changePassword
+    summary: Change the password.
+    description: |
+      Used by both the regular **Settings → Security** flow and by staff who must change
+      a default-issued password. Returns new tokens so the current device stays signed in.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [currentPassword, newPassword]
+            properties:
+              currentPassword: { type: string, format: password }
+              newPassword:     { type: string, format: password, minLength: 8, maxLength: 128 }
+              signOutOtherSessions: { type: boolean, default: true }
+    responses:
+      '200':
+        description: Password changed.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/AuthTokens' }
+      '401':
+        description: Current password incorrect.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422':
+        description: New password violates policy.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              policy:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Validation failed, status: 422, code: password_policy_violation }
+
+  # ---------- Devices ----------
+
+  ListDevices:
+    tags: [Customer · Profile]
+    operationId: listDevices
+    deprecated: true
+    summary: List the customer's registered push devices.
+    description: 'Deprecated. Device registration is no longer required by the profile schema.'
+    responses:
+      '200':
+        description: Devices.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Device' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  RegisterDevice:
+    tags: [Customer · Profile]
+    operationId: registerDevice
+    deprecated: true
+    summary: Register or update a push token for the current device.
+    description: |
+      Deprecated. Device registration is no longer required by the profile schema.
+      Kept for backward compatibility.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [provider, token, platform]
+            properties:
+              provider:   { type: string, enum: [fcm, apns, web_push] }
+              token:      { type: string, minLength: 8, maxLength: 4096 }
+              platform:   { type: string, enum: [ios, android, web] }
+              appVersion: { type: string }
+              deviceId:   { type: string }
+    responses:
+      '200':
+        description: Device upserted.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Device' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteDevice:
+    tags: [Customer · Profile]
+    operationId: deleteDevice
+    deprecated: true
+    summary: Remove a push device. Idempotent.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/DeviceIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Payment methods ----------
+
+  ListPaymentMethods:
+    tags: [Customer · Profile]
+    operationId: listPaymentMethods
+    summary: List saved payment methods.
+    responses:
+      '200':
+        description: Payment methods.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/PaymentMethod' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  AddPaymentMethod:
+    tags: [Customer · Profile]
+    operationId: addPaymentMethod
+    summary: Save a payment method (after PSP-side tokenization).
+    description: |
+      The client first tokenizes the card with the PSP SDK (Stripe Elements, Apple Pay,
+      PayPal Checkout, etc.) and posts the resulting `pspExternalId` here. The server
+      never sees raw PAN.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [pspProvider, pspExternalId, kind]
+            properties:
+              pspProvider:   { type: string, example: stripe }
+              pspExternalId: { type: string }
+              kind:          { type: string, enum: [card, apple_pay, google_pay, paypal, bank_account] }
+              isDefault:     { type: boolean, default: false }
+              fundsForeign:  { type: boolean, default: true }
+              fundsDomestic: { type: boolean, default: false }
+    responses:
+      '201':
+        description: Payment method added.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/PaymentMethod' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '409':
+        description: PSP token already saved or invalid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  UpdatePaymentMethod:
+    tags: [Customer · Profile]
+    operationId: updatePaymentMethod
+    summary: Toggle default and pool flags.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/MethodIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              isDefault:     { type: boolean }
+              fundsForeign:  { type: boolean }
+              fundsDomestic: { type: boolean }
+    responses:
+      '200':
+        description: Updated method.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/PaymentMethod' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeletePaymentMethod:
+    tags: [Customer · Profile]
+    operationId: deletePaymentMethod
+    summary: Delete a saved payment method.
+    description: |
+      Returns 409 if it is the only method funding an active subscription;
+      in that case the client must call `/me/subscription:change-payment-method` first.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/MethodIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Method in use by an active subscription.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              inUse:
+                value: { type: 'https://errors.catchtable.example/conflict', title: In use, status: 409, code: payment_method_required, detail: 'Method funds an active subscription' }

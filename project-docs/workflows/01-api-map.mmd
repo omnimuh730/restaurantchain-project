@@ -1,0 +1,64 @@
+flowchart TD
+%% High-level surface map. Two front-end actors (customer mobile + POS staff)
+%% talk to nine logical API tag groups; the API persists into the 13-collection
+%% Mongo store and pushes realtime events back to both apps.
+    Cust["Customer mobile app"]:::actor
+    Pos["POS staff app<br/>manager / waiter / chef / cashier"]:::actor
+    Anon["Anonymous browser"]:::actor
+
+    subgraph Public["Public surface"]
+        AuthSvc["Auth<br/>/auth/customer/* · /auth/staff/* · /auth/refresh<br/>/auth/sign-out · /auth/password-reset/*"]
+        Meta["Metadata<br/>/metadata/{catalog}"]
+        Disc["Discovery<br/>/discover · /restaurants · /restaurants/{id}<br/>/restaurants/{id}/menu · /availability"]
+    end
+
+    subgraph CustomerAPI["Customer API · customerAuth bearer"]
+        Prof["Profile<br/>/me · devices · payment-methods · password"]
+        Soc["Social<br/>saved-items · recent-searches · friends<br/>daily-bonus · referral"]
+        Wall["Wallets<br/>balances · top-up · gift · transactions"]
+        Rew["Rewards<br/>tier · points · ledger"]
+        Notif["Notifications<br/>list · read · delete"]
+        Sup["Support<br/>conversations · messages"]
+        CSub["Subscription<br/>CatchTable Pro"]
+        Res["Reservations<br/>list · draft · create · cancel · invite<br/>QR check-in · rate"]
+    end
+
+    subgraph PosAPI["POS API · staffAuth bearer scoped to restaurantId"]
+        PR["Restaurant<br/>settings · phones · deposit-cards · staff<br/>floors · menu"]
+        PT["Tables<br/>CRUD · status · QR rotation"]
+        PO["Orders<br/>open · items · send-batch · bill · void · pay"]
+        PK["Kitchen<br/>batches · accept · complete · recall"]
+        PP["Payments<br/>list · get · refunds"]
+        PA["Analytics<br/>sales · revenue · menu · customers · history"]
+        PSub["Restaurant Subscription<br/>tier · invoices"]
+        PRes["POS Reservations<br/>list · approve · decline · check-in · no-show · cancel"]
+    end
+
+    DB[("MongoDB<br/>13 collections")]:::store
+
+    Anon --> AuthSvc
+    Anon --> Meta
+    Anon --> Disc
+
+    Cust --> AuthSvc
+    Cust --> CustomerAPI
+    Cust --> Disc
+    Cust --> Meta
+    Cust --> Res
+
+    Pos --> AuthSvc
+    Pos --> PosAPI
+    Pos --> Meta
+
+    AuthSvc --> DB
+    Meta --> DB
+    Disc --> DB
+    CustomerAPI --> DB
+    PosAPI --> DB
+    Res --> DB
+
+    DB -. "ws push<br/>(see realtime channels diag.)" .-> Cust
+    DB -. "ws push" .-> Pos
+
+    classDef actor fill:#fce8b2,stroke:#a87a00,color:#3a2a00
+    classDef store fill:#dcefe1,stroke:#2f6e43,color:#0d3a1d

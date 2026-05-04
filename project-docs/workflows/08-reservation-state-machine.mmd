@@ -1,0 +1,34 @@
+stateDiagram-v2
+%% Reservation lifecycle. Status enum lifted verbatim from the OpenAPI schema.
+%% The "*_by_*" labels on transitions mirror reservation.timeline.entries[].type.
+    [*] --> requested : POST /reservations<br/>customer pays deposit
+
+    requested --> confirmed : POS approve<br/>(auto-approve possible)
+    requested --> declined  : POS decline<br/>+ refund deposit
+    requested --> cancelled : customer cancel<br/>before grace deadline
+
+    confirmed --> arrived       : QR check-in<br/>(customer or POS)
+    confirmed --> cancelled     : customer cancel<br/>(may be too_late_to_cancel)
+    confirmed --> no_show       : grace_elapsed<br/>(POS or system)
+
+    arrived --> dining          : table seated<br/>POS opens order
+    dining  --> bill_requested  : "Request bill" tap
+    bill_requested --> bill     : POS finalize-bill
+    bill --> visited            : POS confirm payment
+
+    declined  --> [*]
+    cancelled --> [*]
+    no_show   --> [*]
+    visited   --> [*]
+
+    note right of requested
+      Errors:
+        seat_not_available
+        party_too_large/small
+        deposit_required
+        currency_mismatch
+    end note
+    note right of cancelled
+      too_late_to_cancel · 409
+      reservation_already_cancelled · 409
+    end note

@@ -1,0 +1,1030 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Restaurant'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-restaurant` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-restaurant.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/restaurants/{restaurantId}:
+    get: { $ref: '#/x-operations/GetRestaurant' }
+    patch: { $ref: '#/x-operations/UpdateRestaurant' }
+  /pos/restaurants/{restaurantId}/deposit-cards:
+    get: { $ref: '#/x-operations/ListDepositCards' }
+    post: { $ref: '#/x-operations/AddDepositCard' }
+  /pos/restaurants/{restaurantId}/floors:
+    get: { $ref: '#/x-operations/ListFloors' }
+    post: { $ref: '#/x-operations/CreateFloor' }
+  /pos/restaurants/{restaurantId}/menu:
+    get: { $ref: '#/x-operations/GetMenu' }
+  /pos/restaurants/{restaurantId}/phones:
+    get: { $ref: '#/x-operations/ListPhones' }
+    post: { $ref: '#/x-operations/AddPhone' }
+  /pos/restaurants/{restaurantId}/settings:
+    put: { $ref: '#/x-operations/PutSettings' }
+  /pos/restaurants/{restaurantId}/staff:
+    get: { $ref: '#/x-operations/ListStaff' }
+  /pos/restaurants/{restaurantId}/deposit-cards/{cardId}:
+    delete: { $ref: '#/x-operations/DeleteDepositCard' }
+  /pos/restaurants/{restaurantId}/deposit-cards/{cardId}:set-default:
+    post: { $ref: '#/x-operations/SetDefaultDepositCard' }
+  /pos/restaurants/{restaurantId}/floors/{floorId}:
+    delete: { $ref: '#/x-operations/DeleteFloor' }
+    patch: { $ref: '#/x-operations/UpdateFloor' }
+  /pos/restaurants/{restaurantId}/menu/categories:
+    post: { $ref: '#/x-operations/CreateCategory' }
+  /pos/restaurants/{restaurantId}/menu/items:
+    post: { $ref: '#/x-operations/CreateMenuItem' }
+  /pos/restaurants/{restaurantId}/phones/{phoneId}:
+    delete: { $ref: '#/x-operations/DeletePhone' }
+    patch: { $ref: '#/x-operations/UpdatePhone' }
+  /pos/restaurants/{restaurantId}/phones/{phoneId}:set-primary:
+    post: { $ref: '#/x-operations/SetPrimaryPhone' }
+  /pos/restaurants/{restaurantId}/staff/pending:
+    get: { $ref: '#/x-operations/ListPendingStaff' }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:
+    patch: { $ref: '#/x-operations/UpdateStaff' }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:activate:
+    post: { $ref: '#/x-operations/ActivateStaff' }
+  /pos/restaurants/{restaurantId}/staff/{staffId}:inactivate:
+    post: { $ref: '#/x-operations/InactivateStaff' }
+  /pos/restaurants/{restaurantId}/menu/categories/{categoryId}:
+    delete: { $ref: '#/x-operations/DeleteCategory' }
+    patch: { $ref: '#/x-operations/UpdateCategory' }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}:
+    delete: { $ref: '#/x-operations/DeleteMenuItem' }
+    patch: { $ref: '#/x-operations/UpdateMenuItem' }
+  /pos/restaurants/{restaurantId}/menu/subcategories/{subcategoryId}:
+    delete: { $ref: '#/x-operations/DeleteSubcategory' }
+    patch: { $ref: '#/x-operations/UpdateSubcategory' }
+  /pos/restaurants/{restaurantId}/staff/pending/{requestId}:approve:
+    post: { $ref: '#/x-operations/ApprovePendingStaff' }
+  /pos/restaurants/{restaurantId}/staff/pending/{requestId}:reject:
+    post: { $ref: '#/x-operations/RejectPendingStaff' }
+  /pos/restaurants/{restaurantId}/menu/categories/{categoryId}/subcategories:
+    post: { $ref: '#/x-operations/CreateSubcategory' }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/availability:
+    put: { $ref: '#/x-operations/PutMenuItemAvailability' }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/modifiers:
+    post: { $ref: '#/x-operations/CreateMenuModifier' }
+  /pos/restaurants/{restaurantId}/menu/items/{itemId}/modifiers/{modifierId}:
+    delete: { $ref: '#/x-operations/DeleteMenuModifier' }
+    patch: { $ref: '#/x-operations/UpdateMenuModifier' }
+
+x-operations:
+  # POS-side restaurant management:
+  #   - basic profile
+  #   - settings (deposit, grace, operating hours, security, features)
+  #   - phones
+  #   - deposit cards (the cards that capture deposits)
+  #   - staff (active + pending)
+  #   - floors
+  #   - menu (categories, subcategories, items, modifiers, availability)
+
+  # ---------- Restaurant ----------
+
+  GetRestaurant:
+    tags: [POS · Restaurant]
+    operationId: posGetRestaurant
+    summary: Read the restaurant tenant document (no public filtering).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Restaurant.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Restaurant' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  UpdateRestaurant:
+    tags: [POS · Restaurant]
+    operationId: posUpdateRestaurant
+    summary: Update editable restaurant profile fields.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:         { type: string, maxLength: 120 }
+              description:  { type: string, maxLength: 4000 }
+              cuisine:      { type: array, items: { type: string }, minItems: 1, maxItems: 5 }
+              priceLevel:   { type: integer, enum: [1,2,3,4] }
+              thumbnailUrl: { type: string, format: uri-reference }
+              imageUrls:    { type: array, items: { type: string, format: uri-reference } }
+              address:      { $ref: '../components/schemas.yaml#/components/schemas/Address' }
+              location:     { $ref: '../components/common.yaml#/components/schemas/GeoPoint' }
+              amenities:    { type: array, items: { type: string } }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Restaurant' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  # ---------- Settings ----------
+
+  PutSettings:
+    tags: [POS · Restaurant]
+    operationId: posPutRestaurantSettings
+    summary: Replace the entire `settings` document (Settings → General/Security/Features).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantSettings' }
+    responses:
+      '200':
+        description: Settings.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantSettings' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  # ---------- Phones ----------
+
+  ListPhones:
+    tags: [POS · Restaurant]
+    operationId: posListPhones
+    summary: List phone numbers attached to the restaurant.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Phones.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantPhone' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  AddPhone:
+    tags: [POS · Restaurant]
+    operationId: posAddPhone
+    summary: Add a phone number.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [label, phone]
+            properties:
+              label:     { type: string, enum: [main, reservation, kitchen, support, other] }
+              phone:     { type: string }
+              isPrimary: { type: boolean, default: false }
+    responses:
+      '201':
+        description: Added.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantPhone' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409':
+        description: Duplicate phone for this restaurant.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  UpdatePhone:
+    tags: [POS · Restaurant]
+    operationId: posUpdatePhone
+    summary: Update a phone number's label/value.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PhoneIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              label: { type: string, enum: [main, reservation, kitchen, support, other] }
+              phone: { type: string }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantPhone' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeletePhone:
+    tags: [POS · Restaurant]
+    operationId: posDeletePhone
+    summary: Remove a phone number.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PhoneIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Cannot delete the only primary phone.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  SetPrimaryPhone:
+    tags: [POS · Restaurant]
+    operationId: posSetPrimaryPhone
+    summary: Promote a phone to primary.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PhoneIdPath'
+    responses:
+      '200':
+        description: Updated phone.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantPhone' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Deposit cards ----------
+
+  ListDepositCards:
+    tags: [POS · Restaurant]
+    operationId: posListDepositCards
+    summary: List deposit cards (cards that capture reservation deposits).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Deposit cards.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/DepositCard' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  AddDepositCard:
+    tags: [POS · Restaurant]
+    operationId: posAddDepositCard
+    summary: Add a deposit card (after PSP-side tokenization).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [pspProvider, pspExternalId, brand, last4, expMonth, expYear, registrationMode]
+            properties:
+              pspProvider:      { type: string }
+              pspExternalId:    { type: string }
+              brand:            { type: string }
+              last4:            { type: string, pattern: '^[0-9]{4}$' }
+              expMonth:         { type: integer, minimum: 1, maximum: 12 }
+              expYear:          { type: integer, minimum: 2000 }
+              isDefault:        { type: boolean, default: false }
+              registrationMode: { type: string, enum: [scan, type] }
+    responses:
+      '201':
+        description: Added.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/DepositCard' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteDepositCard:
+    tags: [POS · Restaurant]
+    operationId: posDeleteDepositCard
+    summary: Soft-delete a deposit card.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Card is the only one and the restaurant requires deposits.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  SetDefaultDepositCard:
+    tags: [POS · Restaurant]
+    operationId: posSetDefaultDepositCard
+    summary: Promote a deposit card to default.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
+    responses:
+      '200':
+        description: Default card.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/DepositCard' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Staff ----------
+
+  ListStaff:
+    tags: [POS · Restaurant]
+    operationId: posListStaff
+    summary: List active/inactive staff.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: status
+        in: query
+        schema: { type: string, enum: [active, inactive, all], default: all }
+      - name: role
+        in: query
+        schema: { type: string, enum: [manager, waiter, chef, cashier] }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Staff.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/StaffUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  UpdateStaff:
+    tags: [POS · Restaurant]
+    operationId: posUpdateStaff
+    summary: Update staff role/permissions.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/StaffIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              role:        { type: string, enum: [manager, waiter, chef, cashier] }
+              permissions:
+                type: array
+                items: { type: string }
+              fullName:    { type: string }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/StaffUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Cannot demote the last manager.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  InactivateStaff:
+    tags: [POS · Restaurant]
+    operationId: posInactivateStaff
+    summary: Soft-deactivate a staff member.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/StaffIdPath'
+    responses:
+      '200':
+        description: Inactivated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/StaffUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Cannot inactivate the last manager.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ActivateStaff:
+    tags: [POS · Restaurant]
+    operationId: posActivateStaff
+    summary: Re-activate an inactive staff member.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/StaffIdPath'
+    responses:
+      '200':
+        description: Activated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/StaffUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  ListPendingStaff:
+    tags: [POS · Restaurant]
+    operationId: posListPendingStaff
+    summary: List pending staff join requests (Settings → Staff).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Pending requests.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/PendingStaffRequest' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  ApprovePendingStaff:
+    tags: [POS · Restaurant]
+    operationId: posApprovePendingStaff
+    summary: Approve a pending staff member.
+    description: 'Materializes a `staff_users` document in `active` and removes the inbox entry.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PendingRequestIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              permissions:
+                type: array
+                items: { type: string }
+              assignedRole: { type: string, enum: [waiter, chef, cashier] }
+    responses:
+      '200':
+        description: Approved.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/StaffUser' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  RejectPendingStaff:
+    tags: [POS · Restaurant]
+    operationId: posRejectPendingStaff
+    summary: Reject a pending staff member.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PendingRequestIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Floors ----------
+
+  ListFloors:
+    tags: [POS · Restaurant]
+    operationId: posListFloors
+    summary: List floors.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Floors.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/Floor' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  CreateFloor:
+    tags: [POS · Restaurant]
+    operationId: posCreateFloor
+    summary: Create a floor.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name:        { type: string, minLength: 1, maxLength: 64 }
+              sortOrder:   { type: integer, minimum: 0 }
+              isPublished: { type: boolean, default: false }
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Floor' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  UpdateFloor:
+    tags: [POS · Restaurant]
+    operationId: posUpdateFloor
+    summary: Rename / reorder / publish a floor.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FloorIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:        { type: string }
+              sortOrder:   { type: integer }
+              isPublished: { type: boolean }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Floor' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeleteFloor:
+    tags: [POS · Restaurant]
+    operationId: posDeleteFloor
+    summary: Soft-delete a floor (must be empty of tables).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FloorIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Floor still contains tables.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  # ---------- Menu ----------
+
+  GetMenu:
+    tags: [POS · Restaurant]
+    operationId: posGetMenu
+    summary: Read full menu (categories, subcategories, items, modifiers, availability).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Menu.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Menu' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  CreateCategory:
+    tags: [POS · Restaurant]
+    operationId: posCreateMenuCategory
+    summary: Create a menu category.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name:      { type: string }
+              iconUrl:   { type: string, format: uri-reference }
+              sortOrder: { type: integer }
+              isActive:  { type: boolean, default: true }
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuCategory' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  UpdateCategory:
+    tags: [POS · Restaurant]
+    operationId: posUpdateMenuCategory
+    summary: Update a menu category.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CategoryIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:      { type: string }
+              iconUrl:   { type: string, format: uri-reference }
+              sortOrder: { type: integer }
+              isActive:  { type: boolean }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuCategory' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeleteCategory:
+    tags: [POS · Restaurant]
+    operationId: posDeleteMenuCategory
+    summary: Delete a menu category (must be empty of items).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CategoryIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Category contains items.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  CreateSubcategory:
+    tags: [POS · Restaurant]
+    operationId: posCreateMenuSubcategory
+    summary: Create a subcategory under a category.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CategoryIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name:      { type: string }
+              sortOrder: { type: integer }
+              isActive:  { type: boolean, default: true }
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuSubcategory' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  UpdateSubcategory:
+    tags: [POS · Restaurant]
+    operationId: posUpdateMenuSubcategory
+    summary: Update a subcategory.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/SubcategoryIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:      { type: string }
+              sortOrder: { type: integer }
+              isActive:  { type: boolean }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuSubcategory' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeleteSubcategory:
+    tags: [POS · Restaurant]
+    operationId: posDeleteMenuSubcategory
+    summary: Delete a subcategory (must be empty of items).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/SubcategoryIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  CreateMenuItem:
+    tags: [POS · Restaurant]
+    operationId: posCreateMenuItem
+    summary: Create a menu item.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [categoryId, name, price, pool]
+            properties:
+              categoryId:    { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              subcategoryId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              name:          { type: string }
+              shortName:     { type: string }
+              description:   { type: string }
+              imageUrl:      { type: string, format: uri-reference }
+              tags:          { type: array, items: { type: string } }
+              price:         { $ref: '../components/common.yaml#/components/schemas/Money' }
+              pool:          { type: string, enum: [domestic, foreign, either] }
+              modifiers:
+                type: array
+                items: { $ref: '../components/schemas.yaml#/components/schemas/MenuModifier' }
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  UpdateMenuItem:
+    tags: [POS · Restaurant]
+    operationId: posUpdateMenuItem
+    summary: Update a menu item.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:          { type: string }
+              shortName:     { type: string }
+              description:   { type: string }
+              imageUrl:      { type: string, format: uri-reference }
+              tags:          { type: array, items: { type: string } }
+              price:         { $ref: '../components/common.yaml#/components/schemas/Money' }
+              pool:          { type: string, enum: [domestic, foreign, either] }
+              categoryId:    { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              subcategoryId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              isActive:      { type: boolean }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteMenuItem:
+    tags: [POS · Restaurant]
+    operationId: posDeleteMenuItem
+    summary: Soft-delete a menu item.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  PutMenuItemAvailability:
+    tags: [POS · Restaurant]
+    operationId: posPutMenuItemAvailability
+    summary: Set sold-out / availability state.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [isAvailable]
+            properties:
+              isAvailable:  { type: boolean }
+              soldOutUntil: { type: [string, 'null'], format: date-time }
+    responses:
+      '200':
+        description: Updated availability.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuItem/properties/availability' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  CreateMenuModifier:
+    tags: [POS · Restaurant]
+    operationId: posCreateMenuModifier
+    summary: Add a modifier to a menu item.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, priceDelta, selectionType]
+            properties:
+              name:          { type: string }
+              priceDelta:    { $ref: '../components/common.yaml#/components/schemas/Money' }
+              group:         { type: string }
+              selectionType: { type: string, enum: [single, multi] }
+              isRequired:    { type: boolean, default: false }
+              sortOrder:     { type: integer }
+              isActive:      { type: boolean, default: true }
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuModifier' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  UpdateMenuModifier:
+    tags: [POS · Restaurant]
+    operationId: posUpdateMenuModifier
+    summary: Update a modifier.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ModifierIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              name:          { type: string }
+              priceDelta:    { $ref: '../components/common.yaml#/components/schemas/Money' }
+              group:         { type: string }
+              selectionType: { type: string, enum: [single, multi] }
+              isRequired:    { type: boolean }
+              sortOrder:     { type: integer }
+              isActive:      { type: boolean }
+    responses:
+      '200':
+        description: Updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuModifier' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  DeleteMenuModifier:
+    tags: [POS · Restaurant]
+    operationId: posDeleteMenuModifier
+    summary: Delete a modifier.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ModifierIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }

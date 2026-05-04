@@ -1,0 +1,18 @@
+stateDiagram-v2
+%% Reservation invites: host sends, recipient accepts/declines. Each invite
+%% has its own status independent of the parent reservation.
+    [*] --> pending : host posts invite (shareLink + token)
+    pending --> accepted : invitee accepts via /invites/.../accept
+    pending --> declined : invitee declines via /invites/.../decline
+    pending --> expired  : reservation cancelled or expiresAt elapsed
+    pending --> [*] : host deletes the invite
+
+    accepted --> [*]
+    declined --> [*]
+    expired  --> [*]
+
+    note right of pending
+      cannot_invite_self · 422
+      invite_already_decided · 409
+      invite_expired · 410
+    end note

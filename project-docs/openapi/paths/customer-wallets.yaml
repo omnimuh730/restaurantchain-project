@@ -1,0 +1,254 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Wallets'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `customer-wallets` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/customer-wallets.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /me/wallets:
+    get: { $ref: '#/x-operations/GetWallets' }
+  /me/wallets/transactions:
+    get: { $ref: '#/x-operations/ListWalletTransactions' }
+  /me/wallets/top-ups/{topUpId}:
+    get: { $ref: '#/x-operations/GetTopUp' }
+  /me/wallets/top-ups/{topUpId}:cancel:
+    post: { $ref: '#/x-operations/CancelTopUp' }
+  /me/wallets/{pool}/gift:
+    post: { $ref: '#/x-operations/SendGift' }
+  /me/wallets/{pool}/top-up:
+    post: { $ref: '#/x-operations/StartTopUp' }
+
+x-operations:
+  # Wallets cache, transactions, top-up, gifts.
+
+  GetWallets:
+    tags: [Customer · Wallets]
+    operationId: getWallets
+    summary: Read wallet balances (cache from `customer_users.wallets`).
+    description: |
+      Cheap read backed by the cache on the user document. The authoritative source is
+      the `wallet_transactions` ledger; the cache is updated atomically with each entry.
+    responses:
+      '200':
+        description: Wallets cache.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/UserWallets' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  ListWalletTransactions:
+    tags: [Customer · Wallets]
+    operationId: listWalletTransactions
+    summary: List wallet transactions (cursor pagination).
+    parameters:
+      - name: pool
+        in: query
+        schema: { type: string, enum: [domestic, foreign, bonus, all], default: all }
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum: [top_up, top_up_bonus, restaurant_payment, reward_earned, referral_bonus, gift_sent, gift_received, birthday_bonus, daily_bonus, refund, subscription_charge, adjustment, all]
+          default: all
+      - name: direction
+        in: query
+        schema: { type: string, enum: [credit, debit, all], default: all }
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Wallet transactions.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/WalletTransaction' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  StartTopUp:
+    tags: [Customer · Wallets]
+    operationId: startTopUp
+    summary: Start a wallet top-up. Returns a PSP intent for client confirmation.
+    description: |
+      Creates a `payments` document with `purpose=wallet_top_up` in `processing` and a
+      matching draft `wallet_transactions` row that is committed only when the PSP webhook
+      fires (or when `:confirm` is called for SDK-driven providers).
+
+      `pool=bonus` is reserved for system-issued credits and rejected.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/PoolPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount, paymentMethodId]
+            properties:
+              amount:          { $ref: '../components/common.yaml#/components/schemas/Money' }
+              paymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              promoCode:       { type: string, description: 'Optional code that may grant `top_up_bonus`.' }
+          examples:
+            krwTopUp:
+              value: { amount: { amount: '50000', currency: KRW }, paymentMethodId: 65f0000000000000000a0001 }
+    responses:
+      '201':
+        description: Top-up started; finish in client SDK using `clientSecret`.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topUpId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                intent:  { $ref: '../components/schemas.yaml#/components/schemas/PaymentIntentResponse' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Payment method not found or disabled.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422':
+        description: Invalid pool, amount, or currency.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              poolBonus:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Invalid pool, status: 422, code: wallet_pool_disabled, detail: 'bonus pool is system-issued only' }
+              tooSmall:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Amount too small, status: 422, code: top_up_amount_below_minimum, detail: 'minimum is 1000 KRW' }
+              currency:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Currency mismatch, status: 422, code: currency_mismatch, detail: 'pool is KRW; amount currency must be KRW' }
+      '429': { $ref: '../components/common.yaml#/components/responses/TooManyRequests' }
+
+  GetTopUp:
+    tags: [Customer · Wallets]
+    operationId: getTopUp
+    summary: Read a top-up's status (poll until succeeded/failed).
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/TopUpIdPath'
+    responses:
+      '200':
+        description: Top-up status.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topUpId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                status:  { type: string, enum: [requires_payment, processing, succeeded, failed, cancelled] }
+                walletTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                paymentId:           { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                failure:
+                  type: object
+                  properties:
+                    code: { type: string }
+                    message: { type: string }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  CancelTopUp:
+    tags: [Customer · Wallets]
+    operationId: cancelTopUp
+    summary: Cancel a top-up still in `requires_payment` or `processing`.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/TopUpIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Top-up already settled.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  SendGift:
+    tags: [Customer · Wallets]
+    operationId: sendGift
+    summary: Gift wallet balance to another customer.
+    description: |
+      Atomic across two ledger entries (`gift_sent` debit + `gift_received` credit).
+      The `bonus` pool is non-giftable: `403 bonus_not_giftable`.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/PoolPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [recipient, amount]
+            properties:
+              recipient:
+                type: object
+                description: 'One of `username`, `userId`, or `phone`.'
+                properties:
+                  username: { type: string }
+                  userId:   { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                  phone:    { type: string }
+              amount:  { $ref: '../components/common.yaml#/components/schemas/Money' }
+              message: { type: string, maxLength: 200 }
+    responses:
+      '201':
+        description: Gift sent.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                giftId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                senderTransactionId:    { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                recipientTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                balanceAfter:           { $ref: '../components/common.yaml#/components/schemas/Money' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403':
+        description: bonus pool is non-giftable.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              bonus:
+                value: { type: 'https://errors.catchtable.example/forbidden', title: Forbidden, status: 403, code: bonus_not_giftable }
+      '404':
+        description: Recipient not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Cannot gift to self.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              self:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Conflict, status: 409, code: gift_self_not_allowed }
+      '422':
+        description: Insufficient balance, currency mismatch, etc.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              insufficient:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Insufficient balance, status: 422, code: wallet_insufficient_balance }
+              currency:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Currency mismatch, status: 422, code: currency_mismatch }

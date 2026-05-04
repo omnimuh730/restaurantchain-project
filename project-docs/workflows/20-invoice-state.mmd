@@ -1,0 +1,12 @@
+stateDiagram-v2
+%% Invoices live embedded inside subscriptions[].invoices[]. The PSP retries
+%% on a backoff; staff/customers can view but not directly mutate.
+    [*] --> open : period rolls — system creates draft
+    open --> paid : webhook intent succeeded
+    open --> open : retry attempt (attemptCount++)
+    open --> uncollectible : final retry fails
+    open --> voided : cancel mid-cycle (proration credited)
+
+    paid --> [*]
+    uncollectible --> [*]
+    voided --> [*]

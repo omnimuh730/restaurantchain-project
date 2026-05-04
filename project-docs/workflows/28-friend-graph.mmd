@@ -1,0 +1,17 @@
+stateDiagram-v2
+%% Friend edges are stored on customer_users.friends[]. State is per-edge.
+    [*] --> pending_outgoing : Alice sends a friend request to Bob
+    [*] --> pending_outgoing : phone invite (source=phone_invite)
+    pending_outgoing --> accepted : Bob accepts
+    pending_outgoing --> declined : Bob declines
+    pending_outgoing --> [*]      : Alice cancels
+
+    accepted --> blocked : either party blocks
+    blocked --> [*] : unblock (re-friend manually)
+    declined --> [*]
+    accepted --> [*] : DELETE /me/friends/(friendId)
+
+    note right of pending_outgoing
+      mirror edge on Bob.friends:
+        status = pending_incoming
+    end note

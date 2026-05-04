@@ -1,0 +1,103 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000a1001" },
+    "restaurantId": { "$oid": "65f0000000000000000b0001" },
+    "floorId":      { "$oid": "65f0000000000000000f0001" },
+    "tableId":      { "$oid": "65f0000000000000000d0001" },
+    "reservationId":{ "$oid": "65f0000000000000000e0001" },
+    "openedBy": { "$oid": "65f0000000000000000a0001" },
+    "openedAt": { "$date": "2026-04-25T11:01:00.000Z" },
+    "closedAt": null,
+    "partySize": 2,
+    "guestUserIds": [
+      { "$oid": "65f0000000000000000c0001" },
+      { "$oid": "65f0000000000000000c0002" }
+    ],
+    "totals": {
+      "domestic": { "amount": { "$numberDecimal": "9000" }, "currency": "KRW" },
+      "foreign":  { "amount": { "$numberDecimal": "68.00" }, "currency": "USD" }
+    },
+    "itemCount": 4,
+    "draftItemCount": 1,
+    "status": "open",
+    "paymentIds": [],
+    "items": [
+      {
+        "_id": { "$oid": "65f0000000000000000a1101" },
+        "menuItemId": { "$oid": "65f0000000000000000b2001" },
+        "snapshot": {
+          "name": "Edamame",
+          "shortName": "Edamame",
+          "price": { "amount": { "$numberDecimal": "9000" }, "currency": "KRW" },
+          "pool": "domestic"
+        },
+        "qty": 1,
+        "modifiers": [],
+        "note": "extra salt",
+        "chefStatus": "ready",
+        "sendBatchId": { "$oid": "65f0000000000000000a1B01" },
+        "sentAt":      { "$date": "2026-04-25T11:03:00.000Z" },
+        "acceptedBy":  { "$oid": "65f0000000000000000a0002" },
+        "acceptedAt":  { "$date": "2026-04-25T11:03:30.000Z" },
+        "completedBy": { "$oid": "65f0000000000000000a0002" },
+        "completedAt": { "$date": "2026-04-25T11:09:12.000Z" },
+        "addedBy":     { "$oid": "65f0000000000000000a0001" },
+        "addedAt":     { "$date": "2026-04-25T11:02:30.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a1102" },
+        "menuItemId": { "$oid": "65f0000000000000000b2002" },
+        "snapshot": {
+          "name": "Toro Tartare",
+          "price": { "amount": { "$numberDecimal": "32.00" }, "currency": "USD" },
+          "pool": "foreign"
+        },
+        "qty": 1,
+        "modifiers": [],
+        "chefStatus": "in_progress",
+        "sendBatchId": { "$oid": "65f0000000000000000a1B01" },
+        "sentAt":     { "$date": "2026-04-25T11:03:00.000Z" },
+        "acceptedBy": { "$oid": "65f0000000000000000a0002" },
+        "acceptedAt": { "$date": "2026-04-25T11:03:30.000Z" },
+        "addedBy":    { "$oid": "65f0000000000000000a0001" },
+        "addedAt":    { "$date": "2026-04-25T11:02:45.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a1103" },
+        "menuItemId": { "$oid": "65f0000000000000000b2003" },
+        "snapshot": {
+          "name": "Otoro Nigiri",
+          "shortName": "Otoro",
+          "price": { "amount": { "$numberDecimal": "18.00" }, "currency": "USD" },
+          "pool": "foreign"
+        },
+        "qty": 2,
+        "modifiers": [],
+        "chefStatus": "sent",
+        "sendBatchId": { "$oid": "65f0000000000000000a1B02" },
+        "sentAt":   { "$date": "2026-04-25T11:18:00.000Z" },
+        "addedBy":  { "$oid": "65f0000000000000000a0001" },
+        "addedAt":  { "$date": "2026-04-25T11:17:21.000Z" }
+      },
+      {
+        "_id": { "$oid": "65f0000000000000000a1104" },
+        "menuItemId": { "$oid": "65f0000000000000000b2003" },
+        "snapshot": {
+          "name": "Otoro Nigiri",
+          "shortName": "Otoro",
+          "price": { "amount": { "$numberDecimal": "18.00" }, "currency": "USD" },
+          "pool": "foreign"
+        },
+        "qty": 1,
+        "modifiers": [],
+        "chefStatus": "draft",
+        "sendBatchId": null,
+        "addedBy": { "$oid": "65f0000000000000000a0001" },
+        "addedAt": { "$date": "2026-04-25T11:24:00.000Z" }
+      }
+    ],
+    "notes": "Anniversary table; surprise plate plated by 12:30.",
+    "createdAt": { "$date": "2026-04-25T11:01:00.000Z" },
+    "updatedAt": { "$date": "2026-04-25T11:24:00.000Z" }
+  }
+]

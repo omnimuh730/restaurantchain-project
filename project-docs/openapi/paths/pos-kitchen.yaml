@@ -1,0 +1,166 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Kitchen'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-kitchen` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-kitchen.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/orders/{orderId}/batches/{batchId}:accept:
+    post: { $ref: '#/x-operations/AcceptBatch' }
+  /pos/orders/{orderId}/items/{itemId}:complete:
+    post: { $ref: '#/x-operations/CompleteItem' }
+  /pos/orders/{orderId}/items/{itemId}:recall:
+    post: { $ref: '#/x-operations/RecallItem' }
+  /pos/restaurants/{restaurantId}/kitchen/batches:
+    get: { $ref: '#/x-operations/ListBatches' }
+
+x-operations:
+  # Kitchen view: list chef batches; accept / complete / recall items.
+
+  ListBatches:
+    tags: [POS · Kitchen]
+    operationId: posListChefBatches
+    summary: List chef batches across selected tables.
+    description: |
+      Aggregates over `orders.items` where `chefStatus IN (sent, in_progress, ready)` and
+      groups by `sendBatchId`. Mirrors the kitchen tabs:
+        * `received` — `chefStatus=sent`
+        * `in_progress` — `chefStatus=in_progress`
+        * `ready`        — `chefStatus=ready`
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: tableId
+        in: query
+        description: 'Filter to one or more tables (repeatable).'
+        explode: true
+        schema:
+          type: array
+          items: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+      - name: floorId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+      - name: status
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [sent, in_progress, ready, mixed] }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Batches.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/ChefBatchView' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  AcceptBatch:
+    tags: [POS · Kitchen]
+    operationId: posAcceptChefBatch
+    summary: Mark all items in a batch as `in_progress` (kitchen accepts).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/BatchIdPath'
+    responses:
+      '200':
+        description: Batch accepted.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/ChefBatchView' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403':
+        description: Lacks `kitchen.accept` permission.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Batch already accepted/voided.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already accepted, status: 409, code: chef_batch_already_accepted }
+
+  CompleteItem:
+    tags: [POS · Kitchen]
+    operationId: posCompleteChefItem
+    summary: Mark a single item as `ready`.
+    description: 'When all items in a batch are `ready`, batch view flips to `ready`.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    responses:
+      '200':
+        description: Item completed.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/OrderItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Item not in `in_progress`.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already complete, status: 409, code: chef_batch_already_completed }
+
+  RecallItem:
+    tags: [POS · Kitchen]
+    operationId: posRecallChefItem
+    summary: Recall (re-cook) a `ready` item — flips back to `in_progress`.
+    description: |
+      Only allowed before payment is captured for the order. Returns
+      `409 cannot_recall_after_paid` otherwise.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/OrderIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/ItemIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Item recalled.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/OrderItem' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Order already paid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }

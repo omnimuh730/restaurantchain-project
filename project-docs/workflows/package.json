@@ -1,0 +1,15 @@
+{
+  "name": "catchtable-workflows",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Per-diagram Mermaid files for the CatchTable API workflows. Each .mmd is a standalone Mermaid document that can be rendered with mmdc, Mermaid Live, GitHub, etc.",
+  "scripts": {
+    "split": "node _split.mjs",
+    "validate": "node _validate.mjs",
+    "render": "node _render.mjs"
+  },
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0"
+  }
+}

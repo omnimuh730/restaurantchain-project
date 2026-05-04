@@ -1,0 +1,157 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000e0010" },
+    "purpose": "reservation_deposit",
+    "reservationId": { "$oid": "65f0000000000000000e0001" },
+    "payer": {
+      "kind": "customer",
+      "customerUserId": { "$oid": "65f0000000000000000c0001" }
+    },
+    "method": {
+      "kind": "credit",
+      "brand": "Visa",
+      "last4": "4242",
+      "pspChargeId": "ch_t_1QlmzNLkdIw_001"
+    },
+    "intent": {
+      "pspProvider": "toss",
+      "pspIntentId": "pi_t_1QlmzNLkdIw_001",
+      "selectedMethodId": { "$oid": "65f0000000000000000c1101" },
+      "rawMethodHint": "card",
+      "statusTimeline": [
+        { "at": { "$date": "2026-04-22T17:49:50.000Z" }, "status": "requires_payment" },
+        { "at": { "$date": "2026-04-22T17:49:55.000Z" }, "status": "processing" },
+        { "at": { "$date": "2026-04-22T17:50:01.000Z" }, "status": "succeeded" }
+      ]
+    },
+    "amount": { "amount": { "$numberDecimal": "60000" }, "currency": "KRW" },
+    "pool": "domestic",
+    "status": "succeeded",
+    "capturedAt": { "$date": "2026-04-22T17:50:01.000Z" },
+    "refunds": [],
+    "netAmount": { "amount": { "$numberDecimal": "60000" }, "currency": "KRW" },
+    "createdAt": { "$date": "2026-04-22T17:50:01.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000e0011" },
+    "groupId": { "$oid": "65f0000000000000000e9001" },
+    "purpose": "order_bill",
+    "orderId": { "$oid": "65f0000000000000000a1001" },
+    "payer": {
+      "kind": "customer",
+      "customerUserId": { "$oid": "65f0000000000000000c0001" }
+    },
+    "receivedBy": { "$oid": "65f0000000000000000a0001" },
+    "method": {
+      "kind": "wallet",
+      "wallet": "domestic",
+      "walletTransactionId": { "$oid": "65f0000000000000000a2003" }
+    },
+    "amount": { "amount": { "$numberDecimal": "5000" }, "currency": "KRW" },
+    "pool": "domestic",
+    "status": "succeeded",
+    "capturedAt": { "$date": "2026-04-25T12:45:00.000Z" },
+    "refunds": [],
+    "netAmount": { "amount": { "$numberDecimal": "5000" }, "currency": "KRW" },
+    "createdAt": { "$date": "2026-04-25T12:45:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000e0012" },
+    "groupId": { "$oid": "65f0000000000000000e9001" },
+    "purpose": "order_bill",
+    "orderId": { "$oid": "65f0000000000000000a1001" },
+    "payer": {
+      "kind": "customer",
+      "customerUserId": { "$oid": "65f0000000000000000c0001" }
+    },
+    "receivedBy": { "$oid": "65f0000000000000000a0001" },
+    "method": {
+      "kind": "credit",
+      "brand": "Mastercard",
+      "last4": "5454",
+      "pspChargeId": "ch_s_1QlnoMLkdIw_002"
+    },
+    "intent": {
+      "pspProvider": "stripe",
+      "pspIntentId": "pi_s_1QlnoMLkdIw_002",
+      "selectedMethodId": { "$oid": "65f0000000000000000c1102" },
+      "rawMethodHint": "card",
+      "statusTimeline": [
+        { "at": { "$date": "2026-04-25T12:44:30.000Z" }, "status": "requires_payment" },
+        { "at": { "$date": "2026-04-25T12:44:40.000Z" }, "status": "processing" },
+        { "at": { "$date": "2026-04-25T12:44:55.000Z" }, "status": "succeeded" }
+      ]
+    },
+    "amount": { "amount": { "$numberDecimal": "68.00" }, "currency": "USD" },
+    "pool": "foreign",
+    "status": "succeeded",
+    "capturedAt": { "$date": "2026-04-25T12:44:55.000Z" },
+    "refunds": [],
+    "netAmount": { "amount": { "$numberDecimal": "68.00" }, "currency": "USD" },
+    "createdAt": { "$date": "2026-04-25T12:44:55.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000e0013" },
+    "purpose": "wallet_top_up",
+    "topUpId": { "$oid": "65f0000000000000000e9101" },
+    "payer": {
+      "kind": "customer",
+      "customerUserId": { "$oid": "65f0000000000000000c0001" }
+    },
+    "method": {
+      "kind": "credit",
+      "brand": "Mastercard",
+      "last4": "5454",
+      "pspChargeId": "ch_s_1QkooLLkdIw_003"
+    },
+    "intent": {
+      "pspProvider": "stripe",
+      "pspIntentId": "pi_s_1QkooLLkdIw_003",
+      "selectedMethodId": { "$oid": "65f0000000000000000c1102" },
+      "rawMethodHint": "card",
+      "statusTimeline": [
+        { "at": { "$date": "2026-04-20T08:14:00.000Z" }, "status": "requires_payment" },
+        { "at": { "$date": "2026-04-20T08:14:05.000Z" }, "status": "succeeded" }
+      ]
+    },
+    "amount": { "amount": { "$numberDecimal": "50.00" }, "currency": "USD" },
+    "pool": "foreign",
+    "status": "succeeded",
+    "capturedAt": { "$date": "2026-04-20T08:14:05.000Z" },
+    "refunds": [],
+    "netAmount": { "amount": { "$numberDecimal": "50.00" }, "currency": "USD" },
+    "createdAt": { "$date": "2026-04-20T08:14:05.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000e0014" },
+    "purpose": "subscription",
+    "subscriptionId": { "$oid": "65f0000000000000000a5001" },
+    "subscriptionInvoiceIndex": 0,
+    "payer": {
+      "kind": "customer",
+      "customerUserId": { "$oid": "65f0000000000000000c0001" }
+    },
+    "method": {
+      "kind": "credit",
+      "brand": "Mastercard",
+      "last4": "5454",
+      "pspChargeId": "ch_s_1Qjpp..."
+    },
+    "intent": {
+      "pspProvider": "stripe",
+      "pspIntentId": "pi_s_1Qjpp...",
+      "selectedMethodId": { "$oid": "65f0000000000000000c1102" },
+      "rawMethodHint": "card",
+      "statusTimeline": [
+        { "at": { "$date": "2026-03-15T00:00:01.000Z" }, "status": "succeeded" }
+      ]
+    },
+    "amount": { "amount": { "$numberDecimal": "89.99" }, "currency": "USD" },
+    "pool": "foreign",
+    "status": "succeeded",
+    "capturedAt": { "$date": "2026-03-15T00:00:01.000Z" },
+    "refunds": [],
+    "netAmount": { "amount": { "$numberDecimal": "89.99" }, "currency": "USD" },
+    "createdAt": { "$date": "2026-03-15T00:00:01.000Z" }
+  }
+]

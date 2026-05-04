@@ -1,0 +1,47 @@
+flowchart LR
+%% Canonical websocket channel names from common.yaml#RealtimeChannel,
+%% grouped by the entity they describe and the actor that subscribes.
+    subgraph EntityRes["reservations"]
+        rc["reservation.created<br/>reservation.updated<br/>reservation.cancelled<br/>reservation.invite.updated"]
+    end
+    subgraph EntityOrd["orders"]
+        oc["order.updated<br/>order.item.added<br/>order.item.updated<br/>order.item.voided<br/>order.bill.finalized<br/>order.paid<br/>order.batch.sent<br/>order.batch.accepted<br/>order.batch.completed"]
+    end
+    subgraph EntityTbl["tables"]
+        tc["table.created<br/>table.updated<br/>table.deleted"]
+    end
+    subgraph EntityPay["payments"]
+        pc["payment.captured<br/>payment.voided<br/>payment.refund.requested<br/>payment.refund.succeeded<br/>payment.refund.failed"]
+    end
+    subgraph EntityWal["wallets / rewards"]
+        wc["wallet.transaction.created<br/>user.wallets.updated<br/>points.ledger.created<br/>user.rewards.updated"]
+    end
+    subgraph EntityNotif["notifications / profile"]
+        nc["notification.created<br/>notification.read<br/>notification.deleted<br/>user.notifications.unreadCountChanged<br/>user.profile.updated<br/>user.friends.updated"]
+    end
+    subgraph EntitySub["subscriptions / support"]
+        sc["subscription.created · updated<br/>subscription.invoice.created · paid · failed<br/>support.conversation.created · updated<br/>support.message.created"]
+    end
+    subgraph EntityRest["restaurant"]
+        rsc["restaurant.profile.updated<br/>restaurant.menu.updated<br/>restaurant.settings.updated<br/>restaurant.staff.pending"]
+    end
+
+    Cust[Customer app]:::actor
+    Pos[POS app]:::actor
+
+    rc --> Cust
+    rc --> Pos
+    oc --> Pos
+    oc -. "(only if reservation.customerId matches)" .-> Cust
+    tc --> Pos
+    pc --> Pos
+    pc -. "customer-related events" .-> Cust
+    wc --> Cust
+    nc --> Cust
+    nc -. staff variants .-> Pos
+    sc --> Cust
+    sc --> Pos
+    rsc --> Pos
+    rsc -. "menu.updated only" .-> Cust
+
+    classDef actor fill:#fce8b2,stroke:#a87a00,color:#3a2a00

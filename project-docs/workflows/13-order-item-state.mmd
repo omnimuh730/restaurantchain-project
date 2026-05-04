@@ -1,0 +1,21 @@
+stateDiagram-v2
+%% Per-item state. `voided` is a terminal sink reachable from any pre-served
+%% state; `recall` resurrects a `ready`/served item to in_progress.
+    [*] --> draft : add to ticket
+    draft --> sent : send-batch
+    draft --> [*] : DELETE draft (still on ticket)
+    sent --> in_progress : kitchen accepts batch
+    in_progress --> ready : kitchen completes item
+    ready --> in_progress : kitchen recalls item
+    ready --> [*] : served — consumed by bill
+
+    sent --> voided : POS voids (cannot_void_after_send if cooked)
+    in_progress --> voided : manager override
+    draft --> voided : auto when order voided
+    voided --> [*]
+
+    note right of sent
+      Errors on void:
+        cannot_void_after_send · 409
+        chef_batch_already_completed · 409
+    end note

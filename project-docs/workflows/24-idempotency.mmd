@@ -1,0 +1,22 @@
+sequenceDiagram
+%% Replay-safe mutations: any unsafe POST/PUT/PATCH may include an
+%% Idempotency-Key. Keys are scoped to (userId, route, key) and live 24h.
+    autonumber
+    participant App
+    participant API
+    participant Cache as idempotency cache (24h)
+    participant DB
+
+    App->>API: POST /reservations<br/>Idempotency-Key: 8f2c-...
+    API->>Cache: lookup
+    alt miss
+        API->>DB: do the work · attach response
+        API->>Cache: store(key → response, body-hash)
+        API-->>App: 201 (no replay header)
+    else hit · same body
+        API-->>App: 201/200 + Idempotency-Replay: true
+    else hit · different body
+        API-->>App: 409 idempotency_key_conflict
+    end
+
+    Note over App,API: Clients SHOULD generate a fresh ULID per logical action,<br/>not per retry. Retries reuse the same key.

@@ -1,0 +1,209 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Subscriptions'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-subscriptions` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-subscriptions.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/restaurants/{restaurantId}/subscription:
+    get: { $ref: '#/x-operations/GetRestaurantSubscription' }
+  /pos/restaurants/{restaurantId}/subscription:cancel:
+    post: { $ref: '#/x-operations/CancelRestaurantSubscription' }
+  /pos/restaurants/{restaurantId}/subscription:change-plan:
+    post: { $ref: '#/x-operations/ChangeRestaurantPlan' }
+  /pos/restaurants/{restaurantId}/subscription:reactivate:
+    post: { $ref: '#/x-operations/ReactivateRestaurantSubscription' }
+  /pos/restaurants/{restaurantId}/subscription/invoices:
+    get: { $ref: '#/x-operations/ListRestaurantInvoices' }
+
+x-operations:
+  # Restaurant subscription tier (Settings → Upgrade Plans).
+
+  GetRestaurantSubscription:
+    tags: [POS · Subscriptions]
+    operationId: posGetRestaurantSubscription
+    summary: Get the active subscription for the restaurant (or `null`).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Subscription or `null`.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../components/schemas.yaml#/components/schemas/Subscription'
+                - { type: 'null' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  ChangeRestaurantPlan:
+    tags: [POS · Subscriptions]
+    operationId: posChangeRestaurantPlan
+    summary: Choose / change the restaurant's subscription tier.
+    description: |
+      Implements the 4-step "Upgrade Plans" flow:
+        1. Step 1 — Choose plan (this call with `confirm=false`) returns a price preview
+           in the response without charging.
+        2. Step 2 — Confirm select plan (this call with `confirm=true`) actually creates
+           or upgrades/downgrades the subscription. If a charge is needed, returns
+           `paymentIntent`. The client must confirm with the PSP.
+        3. Step 3 — Try Pay is performed by the client confirming the intent with the PSP.
+        4. Step 4 — Update Tier happens server-side on `payment.succeeded` webhook;
+           clients should poll `GET ../subscriptions` to see the new tier.
+
+      Idempotent on `Idempotency-Key`.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [planId, billingCycle, currency]
+            properties:
+              planId:        { type: string, enum: [starter, growth, enterprise] }
+              billingCycle:  { type: string, enum: [monthly, annual] }
+              currency:      { type: string, enum: [KRW, USD] }
+              paymentMethodId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              confirm:       { type: boolean, default: false, description: 'When false, returns a price preview only.' }
+    responses:
+      '200':
+        description: Preview only (when `confirm=false`).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preview:
+                  type: object
+                  properties:
+                    planId:        { type: string }
+                    billingCycle:  { type: string, enum: [monthly, annual] }
+                    amount:        { $ref: '../components/common.yaml#/components/schemas/Money' }
+                    prorationCredit: { $ref: '../components/common.yaml#/components/schemas/Money' }
+                    effectiveAt:   { type: string, format: date-time }
+      '201':
+        description: Subscription change initiated (when `confirm=true`).
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subscription: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+                paymentIntent: { $ref: '../components/schemas.yaml#/components/schemas/PaymentIntentResponse' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403':
+        description: Lacks `subscriptions.manage` permission.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '404':
+        description: Plan not found in `metadata`.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              unknownPlan:
+                value: { type: 'https://errors.catchtable.example/not_found', title: Unknown plan, status: 404, code: subscription_plan_unknown }
+      '409':
+        description: A plan change is already in flight.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              inflight:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Change in progress, status: 409, code: subscription_change_in_flight }
+      '422':
+        description: Currency not supported by the plan.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '502':
+        description: PSP unreachable (Step 3 failure).
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  CancelRestaurantSubscription:
+    tags: [POS · Subscriptions]
+    operationId: posCancelRestaurantSubscription
+    summary: Schedule cancellation at end of billing period.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Subscription updated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: No active subscription / already canceling.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ReactivateRestaurantSubscription:
+    tags: [POS · Subscriptions]
+    operationId: posReactivateRestaurantSubscription
+    summary: Undo a scheduled cancellation.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+    responses:
+      '200':
+        description: Subscription reactivated.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Subscription' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Subscription is not pending cancellation.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  ListRestaurantInvoices:
+    tags: [POS · Subscriptions]
+    operationId: posListRestaurantInvoices
+    summary: List embedded subscription invoices.
+    description: 'Reads `subscriptions.invoices[]`; supports paging because the array can grow large over years.'
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Invoices.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/SubscriptionInvoice' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }

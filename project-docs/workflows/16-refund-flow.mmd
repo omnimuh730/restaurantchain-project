@@ -1,0 +1,22 @@
+stateDiagram-v2
+%% Refunds always go through the original `payments` document. Each refund row
+%% has its own status timeline and either a wallet-credit or PSP refund.
+    [*] --> pending : POST /pos/payments/{pid}/refunds<br/>{ amount, reason }
+    pending --> succeeded : PSP refund.succeeded<br/>or wallet credit committed
+    pending --> failed : PSP refund.failed<br/>(retryable)
+    failed --> pending : retry (same or new refund row)
+
+    succeeded --> [*]
+    failed --> [*] : give up
+
+    note right of pending
+      reason ∈ {
+        reservation_declined,
+        user_cancelled,
+        no_show_waiver,
+        order_voided,
+        duplicate, other
+      }
+      refund_exceeds_net_amount · 422
+      refund_already_succeeded · 409
+    end note

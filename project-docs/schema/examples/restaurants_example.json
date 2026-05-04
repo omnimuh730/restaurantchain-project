@@ -1,0 +1,160 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000b0001" },
+    "name": "Sakura Omakase",
+    "cuisine": ["japanese", "omakase"],
+    "priceLevel": 4,
+    "description": "12-course omakase from chef Hiro. Hinoki counter, 14 seats.",
+    "status": "active",
+    "thumbnailUrl": "https://cdn.catchtable.example/r/sakura/cover.jpg",
+    "imageUrls": [
+      "https://cdn.catchtable.example/r/sakura/1.jpg",
+      "https://cdn.catchtable.example/r/sakura/2.jpg"
+    ],
+    "address": {
+      "line1": "12 Apgujeong-ro 60-gil",
+      "line2": "B1F",
+      "city": "Seoul",
+      "country": "KR",
+      "postalCode": "06010"
+    },
+    "location": { "type": "Point", "coordinates": [127.0473, 37.5172] },
+    "primaryPhone": "+8225551234",
+    "secondaryPhone": "+8225551236",
+    "rating": {
+      "reviewCount": 412,
+      "overall": { "$numberDecimal": "4.80" },
+      "taste": { "$numberDecimal": "4.90" },
+      "ambience": { "$numberDecimal": "4.70" },
+      "service": { "$numberDecimal": "4.85" },
+      "valueOfPrice": { "$numberDecimal": "4.60" }
+    },
+    "amenities": ["wifi", "private", "vegan"],
+    "flags": { "isNew": true },
+    "subscription": {
+      "tier": "pro",
+      "issueDate": { "$date": "2026-04-01T00:00:00.000Z" },
+      "expireDate": { "$date": "2026-05-01T00:00:00.000Z" },
+      "status": "active"
+    },
+    "settings": {
+      "general": {
+        "deposit": {
+          "moneyType": "domestic",
+          "amount": { "$numberDecimal": "30000" }
+        },
+        "gracePeriodMinutes": 15,
+        "operatingHours": [
+          { "day": 0, "open": "00:00", "close": "00:00", "closed": true },
+          { "day": 1, "open": "18:00", "close": "23:00" },
+          { "day": 2, "open": "18:00", "close": "23:00" },
+          { "day": 3, "open": "18:00", "close": "23:00" },
+          { "day": 4, "open": "18:00", "close": "23:00" },
+          { "day": 5, "open": "18:00", "close": "00:00" },
+          { "day": 6, "open": "12:00", "close": "00:00" }
+        ]
+      }
+    },
+    "floors": [
+      { "_id": { "$oid": "65f0000000000000000f0001" }, "name": "Main",  "sortOrder": 0, "isPublished": true, "deletedAt": null },
+      { "_id": { "$oid": "65f0000000000000000f0002" }, "name": "Patio", "sortOrder": 1, "isPublished": true, "deletedAt": null }
+    ],
+    "menu": {
+      "categories": [
+        {
+          "_id": { "$oid": "65f0000000000000000b1001" },
+          "name": "Appetizers",
+          "iconUrl": "https://cdn.example/icons/app.png",
+          "sortOrder": 0,
+          "isActive": true,
+          "subcategories": [
+            { "_id": { "$oid": "65f0000000000000000b1101" }, "name": "Cold",   "sortOrder": 0, "isActive": true },
+            { "_id": { "$oid": "65f0000000000000000b1102" }, "name": "Warm",   "sortOrder": 1, "isActive": true }
+          ]
+        },
+        {
+          "_id": { "$oid": "65f0000000000000000b1002" },
+          "name": "Sushi",
+          "sortOrder": 1,
+          "isActive": true,
+          "subcategories": [
+            { "_id": { "$oid": "65f0000000000000000b1201" }, "name": "Nigiri", "sortOrder": 0, "isActive": true },
+            { "_id": { "$oid": "65f0000000000000000b1202" }, "name": "Maki",   "sortOrder": 1, "isActive": true }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "_id": { "$oid": "65f0000000000000000b2001" },
+          "categoryId": { "$oid": "65f0000000000000000b1001" },
+          "subcategoryId": { "$oid": "65f0000000000000000b1101" },
+          "name": "Edamame",
+          "shortName": "Edamame",
+          "description": "Steamed soybean pods, sea salt.",
+          "imageUrl": "https://cdn.example/m/edamame.jpg",
+          "tags": ["vegan", "starter"],
+          "price": { "amount": { "$numberDecimal": "9000" }, "currency": "KRW" },
+          "isActive": true,
+          "deletedAt": null,
+          "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
+          "updatedAt": { "$date": "2026-03-01T00:00:00.000Z" }
+        },
+        {
+          "_id": { "$oid": "65f0000000000000000b2002" },
+          "categoryId": { "$oid": "65f0000000000000000b1001" },
+          "subcategoryId": { "$oid": "65f0000000000000000b1101" },
+          "name": "Toro Tartare",
+          "description": "Bluefin tuna belly tartare, yuzu kosho, nori chip.",
+          "imageUrl": "https://cdn.example/m/toro.jpg",
+          "price": { "amount": { "$numberDecimal": "32.00" }, "currency": "USD" },
+          "isActive": true,
+          "deletedAt": null,
+          "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
+          "updatedAt": { "$date": "2026-04-22T00:00:00.000Z" }
+        },
+        {
+          "_id": { "$oid": "65f0000000000000000b2003" },
+          "categoryId": { "$oid": "65f0000000000000000b1002" },
+          "subcategoryId": { "$oid": "65f0000000000000000b1201" },
+          "name": "Otoro Nigiri",
+          "shortName": "Otoro",
+          "price": { "amount": { "$numberDecimal": "18.00" }, "currency": "USD" },
+          "isActive": true,
+          "deletedAt": null,
+          "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
+          "updatedAt": { "$date": "2026-04-22T00:00:00.000Z" }
+        }
+      ]
+    },
+    "depositCards": [
+      {
+        "_id": { "$oid": "65f0000000000000000b4001" },
+        "pspProvider": "toss",
+        "pspExternalId": "card_t_8FQz2vN0xQ8M0",
+        "brand": "Visa",
+        "last4": "4242",
+        "expMonth": 12,
+        "expYear": 2028,
+        "isDefault": true,
+        "registrationMode": "scan",
+        "createdBy": { "$oid": "65f0000000000000000a0001" },
+        "addedAt": { "$date": "2025-08-01T00:30:00.000Z" },
+        "deletedAt": null
+      }
+    ],
+    "pendingStaff": [
+      {
+        "_id": { "$oid": "65f0000000000000000b5001" },
+        "fullName": "Daniel Yoo",
+        "username": "daniel.cashier",
+        "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$ZGFuaWVsc2FsdA$xR2k...",
+        "requestedRole": "cashier",
+        "requestedAt": { "$date": "2026-04-25T09:21:18.000Z" }
+      }
+    ],
+    "createdBy": { "$oid": "65f0000000000000000a0001" },
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-25T14:01:00.000Z" },
+    "deletedAt": null
+  }
+]

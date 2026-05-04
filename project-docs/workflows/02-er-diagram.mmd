@@ -1,0 +1,151 @@
+erDiagram
+%% The 13-collection compromise schema. Lines marked with `||--o{` mean
+%% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
+%% Cache fields living on `customer_users` (wallets, rewards, notifUnread) are
+%% kept in sync atomically with the authoritative ledger collections.
+    customer_users ||--o{ reservations : "places"
+    customer_users ||--o{ wallet_transactions : "owns ledger"
+    customer_users ||--o{ points_ledger : "owns ledger"
+    customer_users ||--o{ payments : "pays"
+    customer_users ||--o{ subscriptions : "may have Pro"
+    customer_users ||--o{ notifications : "receives"
+    customer_users ||--o{ support_conversations : "opens"
+
+    restaurants ||--o{ reservations : "hosts"
+    restaurants ||--o{ orders : "operates"
+    restaurants ||--o{ payments : "captures"
+    restaurants ||--o{ subscriptions : "may have tier"
+    restaurants ||--o{ notifications : "receives"
+
+    reservations ||--o| orders : "may open one"
+    reservations ||--o{ payments : "deposits + bills"
+
+    orders ||--o{ payments : "settles"
+
+    subscriptions ||--o{ payments : "invoices"
+    subscriptions ||--o{ wallet_transactions : "subscription_charge"
+
+    wallet_transactions }o--|| payments : "links to"
+    points_ledger }o--|| wallet_transactions : "may twin"
+
+    support_conversations ||--o{ support_messages : "contains"
+
+    metadata ||..|| customer_users : "static catalogs"
+    metadata ||..|| restaurants : "static catalogs"
+
+    customer_users {
+        ObjectId _id
+        string username
+        string email
+        string phone
+        object wallets       "cache · 3 pools"
+        object rewards       "cache · tier+points"
+        int    notifUnreadCount
+        array  paymentMethods
+        array  devices
+        array  savedItems
+        array  recentSearches
+        array  friends
+        object referral
+        object dailyBonus
+    }
+    restaurants {
+        ObjectId _id
+        string name
+        string status
+        string tier
+        object settings
+        array  phones
+        array  depositCards
+        array  staff
+        array  floors           "tables embedded inside"
+        object menu             "categories+items embedded"
+    }
+    reservations {
+        ObjectId _id
+        ObjectId customerUserId
+        ObjectId restaurantId
+        ObjectId orderId
+        ObjectId paymentId
+        string   status
+        array    invites
+        array    timeline
+    }
+    orders {
+        ObjectId _id
+        ObjectId restaurantId
+        ObjectId tableId
+        ObjectId reservationId
+        string   status
+        array    items          "with chefStatus per item"
+        array    batches        "kitchen batches"
+        object   totals
+    }
+    payments {
+        ObjectId _id
+        string   purpose
+        string   status
+        ObjectId reservationId
+        ObjectId orderId
+        ObjectId topUpId
+        ObjectId subscriptionId
+        object   amount
+        object   intent          "PSP timeline"
+        array    refunds
+    }
+    wallet_transactions {
+        ObjectId _id
+        ObjectId customerUserId
+        string   pool
+        string   type
+        string   direction
+        decimal  amount
+        decimal  balanceAfter
+    }
+    points_ledger {
+        ObjectId _id
+        ObjectId customerUserId
+        string   reason
+        string   direction
+        int      points
+        int      balanceAfter
+    }
+    notifications {
+        ObjectId _id
+        string   recipientKind
+        ObjectId customerUserId
+        ObjectId staffUserId
+        string   type
+        bool     read
+    }
+    support_conversations {
+        ObjectId _id
+        string   subjectKind
+        string   status
+        string   priority
+    }
+    support_messages {
+        ObjectId _id
+        ObjectId conversationId
+        string   senderKind
+        string   body
+    }
+    subscriptions {
+        ObjectId _id
+        string   product
+        string   planCode
+        string   status
+        array    invoices
+        array    history
+    }
+    sessions {
+        ObjectId _id
+        ObjectId userId
+        string   refreshTokenHash
+        date     expiresAt
+    }
+    metadata {
+        string   _id            "catalog code · PK"
+        array    items
+        int      version
+    }

@@ -1,0 +1,16 @@
+stateDiagram-v2
+%% Status mirrors who has the ball. Channel is in_app_chat | email | phone.
+    [*] --> open : POST /me/support/conversations
+    open --> pending_agent : user posts message<br/>or system triage
+    pending_agent --> pending_user : agent replies
+    pending_user --> pending_agent : user replies
+    pending_user --> resolved : agent marks resolved
+    pending_agent --> resolved : agent marks resolved
+    resolved --> closed : 7 days no activity (auto)
+    resolved --> pending_user : user replies (re-opens)
+    closed --> [*]
+
+    note right of closed
+      conversation_closed · 409
+      message_too_long · 422
+    end note

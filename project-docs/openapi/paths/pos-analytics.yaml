@@ -1,0 +1,167 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Pos Analytics'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `pos-analytics` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/pos-analytics.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /pos/restaurants/{restaurantId}/analytics/customers:
+    get: { $ref: '#/x-operations/GetCustomerAnalysis' }
+  /pos/restaurants/{restaurantId}/analytics/history:
+    get: { $ref: '#/x-operations/GetHistory' }
+  /pos/restaurants/{restaurantId}/analytics/menu:
+    get: { $ref: '#/x-operations/GetMenuAnalysis' }
+  /pos/restaurants/{restaurantId}/analytics/revenue:
+    get: { $ref: '#/x-operations/GetRevenueAnalysis' }
+  /pos/restaurants/{restaurantId}/analytics/sales-dashboard:
+    get: { $ref: '#/x-operations/GetSalesDashboard' }
+
+x-operations:
+  # Analytics endpoints. All take a date window and return aggregated views.
+
+  GetSalesDashboard:
+    tags: [POS · Analytics]
+    operationId: posGetSalesDashboard
+    summary: Sales Dashboard (totals, daily revenue, hourly heatmap, top items).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - name: timezone
+        in: query
+        schema: { type: string, default: 'Asia/Seoul' }
+    responses:
+      '200':
+        description: Dashboard.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/SalesDashboard' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  GetRevenueAnalysis:
+    tags: [POS · Analytics]
+    operationId: posGetRevenueAnalysis
+    summary: Revenue Analysis (time-series buckets).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - name: granularity
+        in: query
+        schema: { type: string, enum: [hour, day, week, month], default: day }
+      - name: pool
+        in: query
+        schema: { type: string, enum: [domestic, foreign, both], default: both }
+    responses:
+      '200':
+        description: Revenue.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RevenueAnalysis' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  GetMenuAnalysis:
+    tags: [POS · Analytics]
+    operationId: posGetMenuAnalysis
+    summary: Menu Analysis 1+2 (sold counts, voids, prep time, revenue).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - name: categoryId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Menu analysis.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/MenuAnalysis' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  GetCustomerAnalysis:
+    tags: [POS · Analytics]
+    operationId: posGetCustomerAnalysis
+    summary: Customer Analysis (unique vs repeat guests, segments).
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+    responses:
+      '200':
+        description: Customer analysis.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/CustomerAnalysis' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  GetHistory:
+    tags: [POS · Analytics]
+    operationId: posGetHistory
+    summary: Cross-domain history (Compact + Receipts views).
+    description: |
+      `view=compact` returns rows of `HistoryRow` (one row per event).
+      `view=receipts` returns receipts with itemized lines from paid orders.
+    security: [{ staffAuth: [] }]
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: view
+        in: query
+        required: true
+        schema: { type: string, enum: [compact, receipts] }
+      - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
+      - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
+      - name: kind
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [reservation, order, payment, refund] }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: History data — shape depends on `view`.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - title: compact
+                  allOf:
+                    - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                    - type: object
+                      properties:
+                        view: { const: compact }
+                        data:
+                          type: array
+                          items: { $ref: '../components/schemas.yaml#/components/schemas/HistoryRow' }
+                - title: receipts
+                  allOf:
+                    - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                    - type: object
+                      properties:
+                        view: { const: receipts }
+                        data:
+                          type: array
+                          items: { $ref: '../components/schemas.yaml#/components/schemas/HistoryReceipt' }
+              discriminator:
+                propertyName: view
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }

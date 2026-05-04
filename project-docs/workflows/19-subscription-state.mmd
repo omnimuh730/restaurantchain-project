@@ -1,0 +1,29 @@
+stateDiagram-v2
+%% One `subscriptions` collection covers BOTH product=catchtable_pro (per
+%% customer) and product=restaurant_tier (per restaurant). The state machine
+%% is identical; downstream effects (Pro perks vs. POS feature gates) differ.
+    [*] --> trialing : start (plan has trial)
+    [*] --> active   : start (no trial)
+
+    trialing --> active   : trial period ends — payment ok
+    trialing --> past_due : trial ends — payment fails
+    trialing --> cancelled : user or staff cancels
+
+    active --> past_due  : invoice payment_failed
+    active --> cancelled : cancel (cancelAtPeriodEnd=true)
+    active --> active    : change-plan (proration logged in history)
+    active --> active    : change-payment-method
+
+    past_due --> active    : retry succeeds
+    past_due --> cancelled : final retry fails — grace exhausted
+    past_due --> expired   : currentPeriodEnd elapsed unpaid
+
+    cancelled --> active : reactivate (within period)
+    cancelled --> expired : currentPeriodEnd elapsed
+    expired --> [*]
+
+    note right of past_due
+      subscription_past_due · 409
+      subscription_cannot_downgrade_with_balance · 409
+      subscription_change_in_flight · 409
+    end note

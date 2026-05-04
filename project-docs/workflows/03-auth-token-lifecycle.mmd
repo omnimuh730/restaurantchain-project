@@ -1,0 +1,39 @@
+sequenceDiagram
+%% Sign-in returns short-lived `accessToken` + long-lived `refreshToken`.
+%% The client transparently refreshes on `token_expired` (401). Sign-out
+%% revokes the refresh row in `sessions`.
+    autonumber
+    participant App as Client app
+    participant API as CatchTable API
+    participant Sess as sessions (TTL)
+    participant Users as customer_users / staff (in restaurants)
+
+    App->>API: POST /auth/{customer|staff}/sign-in<br/>{ username, password, device }
+    API->>Users: lookup + verify hash
+    alt invalid credentials
+        API-->>App: 401 invalid_credentials
+    else account inactive
+        API-->>App: 403 account_inactive
+    else pending_approval
+        API-->>App: 403 account_pending_approval
+    else success
+        API->>Sess: insert refreshTokenHash (TTL ~30d)
+        API-->>App: 200 { accessToken (15m), refreshToken (30d), user }
+    end
+
+    Note over App,API: Subsequent calls send `Authorization: Bearer <accessToken>`.
+
+    App->>API: GET /me   (Bearer expired)
+    API-->>App: 401 token_expired
+
+    App->>API: POST /auth/refresh { refreshToken }
+    API->>Sess: validate + rotate
+    alt rotation success
+        API-->>App: 200 { new accessToken, new refreshToken }
+    else reuse / revoked
+        API-->>App: 401 unauthenticated  (force sign-out)
+    end
+
+    App->>API: POST /auth/sign-out
+    API->>Sess: delete row
+    API-->>App: 204

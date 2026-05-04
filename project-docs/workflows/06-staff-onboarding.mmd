@@ -1,0 +1,27 @@
+sequenceDiagram
+%% Two paths: a manager registers a NEW restaurant, or staff request to JOIN an
+%% existing restaurant. Both end pending until manager approves.
+    autonumber
+    actor Mgr as Manager (new restaurant)
+    actor Stf as Staff (joining)
+    participant API as API
+    participant R as restaurants
+
+    %% Path A — restaurant + manager combined
+    Mgr->>API: POST /auth/staff/sign-up/restaurant<br/>{ restaurant{...}, manager{...} }
+    API->>R: insert with status=pending_approval, tier=free
+    API-->>Mgr: 201 { user, restaurant.status=pending_approval }
+    Note over Mgr,API: Mgr lands on "approval wait" screen and polls.
+
+    %% Path B — staff requesting to join
+    Stf->>API: POST /auth/staff/sign-up/staff<br/>{ restaurantId, profile, requestedRole }
+    API->>R: push pending_request (status=pending_approval)
+    API-->>Stf: 201 { request.status=pending_approval }
+
+    %% Manager approval (path B continues)
+    Mgr->>API: GET /pos/restaurants/{rid}/staff/pending
+    API-->>Mgr: list of pending requests
+    Mgr->>API: POST /pos/.../staff/pending/{requestId}:approve<br/>{ role, permissions[] }
+    API->>R: move into staff[] with status=active
+    API-->>Mgr: 200
+    API-->>Stf: ws restaurant.staff.pending → access granted

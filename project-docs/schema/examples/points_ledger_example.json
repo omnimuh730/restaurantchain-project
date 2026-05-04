@@ -1,0 +1,61 @@
+[
+  {
+    "_id": { "$oid": "65f0000000000000000a3001" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "type": "daily_bonus",
+    "direction": "credit",
+    "points": 25,
+    "balanceAfter": 320,
+    "notes": "Box 1 reward",
+    "createdBy": { "kind": "system" },
+    "occurredAt": { "$date": "2026-04-25T07:55:11.000Z" },
+    "createdAt":  { "$date": "2026-04-25T07:55:11.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000a3002" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "type": "reservation_completed",
+    "direction": "credit",
+    "points": 50,
+    "balanceAfter": 295,
+    "reservationId": { "$oid": "65f0000000000000000e0002" },
+    "createdBy": { "kind": "system" },
+    "occurredAt": { "$date": "2026-04-18T12:01:00.000Z" },
+    "createdAt":  { "$date": "2026-04-18T12:01:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000a3003" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "type": "referral_bonus",
+    "direction": "credit",
+    "points": 50,
+    "balanceAfter": 245,
+    "notes": "Referee mike used MIKE-2P9 -> SARAH credited",
+    "createdBy": { "kind": "system" },
+    "occurredAt": { "$date": "2026-02-04T11:00:01.000Z" },
+    "createdAt":  { "$date": "2026-02-04T11:00:01.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000a3004" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "type": "birthday_bonus",
+    "direction": "credit",
+    "points": 100,
+    "balanceAfter": 195,
+    "createdBy": { "kind": "system" },
+    "occurredAt": { "$date": "2025-11-12T00:00:00.000Z" },
+    "createdAt":  { "$date": "2025-11-12T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000a3005" },
+    "userId": { "$oid": "65f0000000000000000c0001" },
+    "type": "manual_adjustment",
+    "direction": "debit",
+    "points": 5,
+    "balanceAfter": 95,
+    "notes": "Duplicate daily-bonus claim correction (case 7821)",
+    "createdBy": { "kind": "staff", "id": { "$oid": "65f0000000000000000a0001" } },
+    "occurredAt": { "$date": "2025-10-09T09:30:00.000Z" },
+    "createdAt":  { "$date": "2025-10-09T09:30:00.000Z" }
+  }
+]

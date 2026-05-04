@@ -1,0 +1,676 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Reservations'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for the `reservations` path module.
+
+    Operations live under `x-operations` (a spec-compliant extension key) so that:
+      * the root `openapi.yaml` can $ref each one via `paths/reservations.yaml#/x-operations/<OpName>`; and
+      * editors that do not follow cross-file `$ref`s (Swagger Preview, Postman import,
+        Stoplight, ...) can still parse and render this single file in isolation.
+
+    Cross-file refs into `../components/*.yaml` will appear unresolved when this file
+    is opened standalone. To see the full spec resolved, open `openapi.bundled.yaml`
+    or run `redocly preview-docs` on the root `openapi.yaml`.
+paths:
+  /reservations:
+    post: { $ref: '#/x-operations/CreateReservation' }
+  /me/active-draft:
+    delete: { $ref: '#/x-operations/DeleteActiveDraft' }
+    get: { $ref: '#/x-operations/GetActiveDraft' }
+    put: { $ref: '#/x-operations/PutActiveDraft' }
+  /me/reservations:
+    get: { $ref: '#/x-operations/ListMyReservations' }
+  /reservations/{reservationId}:
+    get: { $ref: '#/x-operations/GetReservation' }
+  /reservations/{reservationId}:cancel:
+    post: { $ref: '#/x-operations/CancelReservation' }
+  /reservations/{reservationId}:check-in-by-qr:
+    post: { $ref: '#/x-operations/CheckInByQr' }
+  /reservations/{reservationId}:rate:
+    post: { $ref: '#/x-operations/RateReservation' }
+  /pos/reservations/{reservationId}:approve:
+    post: { $ref: '#/x-operations/PosApprove' }
+  /pos/reservations/{reservationId}:cancel:
+    post: { $ref: '#/x-operations/PosCancel' }
+  /pos/reservations/{reservationId}:check-in:
+    post: { $ref: '#/x-operations/PosCheckIn' }
+  /pos/reservations/{reservationId}:decline:
+    post: { $ref: '#/x-operations/PosDecline' }
+  /pos/reservations/{reservationId}:no-show:
+    post: { $ref: '#/x-operations/PosNoShow' }
+  /reservations/invites/{inviteToken}:accept:
+    post: { $ref: '#/x-operations/AcceptInvite' }
+  /reservations/invites/{inviteToken}:decline:
+    post: { $ref: '#/x-operations/DeclineInvite' }
+  /reservations/{reservationId}/invites:
+    get: { $ref: '#/x-operations/ListInvites' }
+    post: { $ref: '#/x-operations/CreateInvite' }
+  /pos/restaurants/{restaurantId}/reservations:
+    get: { $ref: '#/x-operations/PosListReservations' }
+  /reservations/{reservationId}/invites/{inviteId}:
+    delete: { $ref: '#/x-operations/CancelInvite' }
+
+x-operations:
+  # Reservation lifecycle (customer + POS shared) + drafts + invites + detailed ratings.
+
+  # ---------- Customer-side ----------
+
+  ListMyReservations:
+    tags: [Reservations]
+    operationId: listMyReservations
+    summary: List reservations for the current customer (Dining tabs).
+    description: |
+      Tabs map to `tab` values:
+        * `upcoming` — future `requested|confirmed|arrived|dining|bill_requested|bill`
+        * `past`     — `visited|cancelled|no_show`
+        * `invited`  — reservations the user is invited to (via `invites[]`)
+    parameters:
+      - name: tab
+        in: query
+        schema: { type: string, enum: [upcoming, past, invited, all], default: upcoming }
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Reservations.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  GetReservation:
+    tags: [Reservations]
+    operationId: getReservation
+    summary: Read one reservation (customer + POS use this).
+    description: |
+      Authorization:
+        * Customer token must be the `userId` or be among `invites[].inviteeUserId` with status accepted.
+        * Staff token must match the reservation's `restaurantId`.
+    security:
+      - customerAuth: []
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    responses:
+      '200':
+        description: Reservation.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  # ---------- Active draft (per-user, single) ----------
+
+  GetActiveDraft:
+    tags: [Reservations]
+    operationId: getActiveDraft
+    summary: Read the customer's current reservation draft (Reservation step 1-3 state).
+    responses:
+      '200':
+        description: Draft (or null).
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '../components/schemas.yaml#/components/schemas/ReservationDraft'
+                - type: 'null'
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  PutActiveDraft:
+    tags: [Reservations]
+    operationId: putActiveDraft
+    summary: Upsert the active draft (per-step partial saves).
+    description: |
+      Replaces the entire `activeDraft` document. Caller is expected to do
+      read-modify-write at every step. Server validates that `step` only moves forward
+      by one or stays equal, and that required fields for the step are present.
+
+      The draft TTL (`expiresAt`) is bumped 24h on every save.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '../components/schemas.yaml#/components/schemas/ReservationDraft' }
+    responses:
+      '200':
+        description: Draft saved.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/ReservationDraft' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Restaurant not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Draft step jumped or moved backward.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              skipped:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Step skipped, status: 409, code: draft_step_skipped }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  DeleteActiveDraft:
+    tags: [Reservations]
+    operationId: deleteActiveDraft
+    summary: Discard the active draft.
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  # ---------- Create / cancel / rate ----------
+
+  CreateReservation:
+    tags: [Reservations]
+    operationId: createReservation
+    summary: Promote the active draft into a real reservation.
+    description: |
+      The body must reference the draft (`draftId` or `restaurantId`) AND, when the
+      restaurant requires deposit, a paid `paymentId`. The server re-validates seat
+      availability with a transaction; if the slot was just taken it returns
+      `409 seat_not_available` and the client should refresh `/availability`.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [restaurantId]
+            properties:
+              restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              paymentId:
+                description: 'Required when restaurant.settings.general.deposit.amountPerGuest > 0.'
+                allOf: [{ $ref: '../components/common.yaml#/components/schemas/ObjectId' }]
+              inviteUsernames:
+                type: array
+                items: { type: string }
+                maxItems: 19
+                description: 'Optional friends to auto-invite. Bypasses the separate `:invites` call.'
+          example:
+            restaurantId: 65f0000000000000000b0001
+            paymentId:    65f0000000000000000d0010
+            inviteUsernames: [alex]
+    responses:
+      '201':
+        description: Reservation created.
+        headers:
+          Location: { $ref: '../components/common.yaml#/components/headers/Location' }
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Restaurant or draft not found.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Seat just taken, or deposit currency mismatch, or duplicate idempotency key.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              seatGone:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Seat not available, status: 409, code: seat_not_available }
+              currency:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Currency mismatch, status: 409, code: currency_mismatch }
+      '422':
+        description: Missing fields or deposit required but not paid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              depositRequired:
+                value: { type: 'https://errors.catchtable.example/validation_failed', title: Deposit required, status: 422, code: deposit_required }
+
+  CancelReservation:
+    tags: [Reservations]
+    operationId: cancelReservation
+    summary: Customer cancels a reservation.
+    description: |
+      Refunds the deposit (if any) according to the restaurant's cancellation policy
+      encoded in `metadata.feature_flags`/business policy. Returns 409 if the cancel
+      window has already passed.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Reservation cancelled. `refundId` set if applicable.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Already cancelled, already started, or past cancel window.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              tooLate:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Too late to cancel, status: 409, code: too_late_to_cancel }
+              alreadyCancelled:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Already cancelled, status: 409, code: reservation_already_cancelled }
+
+  RateReservation:
+    tags: [Reservations]
+    operationId: rateReservation
+    summary: Submit post-visit category ratings + comment (Dining → past tab).
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rating]
+            properties:
+              rating:
+                type: object
+                required: [overall, taste, ambience, service, valueOfPrice]
+                properties:
+                  overall:      { type: number, minimum: 1, maximum: 5 }
+                  taste:        { type: number, minimum: 1, maximum: 5 }
+                  ambience:     { type: number, minimum: 1, maximum: 5 }
+                  service:      { type: number, minimum: 1, maximum: 5 }
+                  valueOfPrice: { type: number, minimum: 1, maximum: 5 }
+              comment: { type: string, maxLength: 2000 }
+    responses:
+      '200':
+        description: Rating saved. May credit `points_ledger` `review_bonus`.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reservation:    { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+                pointsAwarded:  { type: integer, minimum: 0 }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Reservation not visited or already rated.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  # ---------- Invites ----------
+
+  ListInvites:
+    tags: [Reservations]
+    operationId: listInvites
+    summary: List all invites on a reservation.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    responses:
+      '200':
+        description: Invites.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: array
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/ReservationInvite' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  CreateInvite:
+    tags: [Reservations]
+    operationId: createReservationInvite
+    summary: Invite a friend (by `userId`, `username`, or `phone`).
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              inviteeUserId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+              username:      { type: string }
+              phone:         { type: string }
+            oneOf:
+              - { required: [inviteeUserId] }
+              - { required: [username] }
+              - { required: [phone] }
+    responses:
+      '201':
+        description: Invite created (sends notification + SMS as appropriate).
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/ReservationInvite' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Already invited, party-size cap exceeded, or self-invite.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              cap:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Party too large, status: 409, code: party_too_large }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  CancelInvite:
+    tags: [Reservations]
+    operationId: cancelReservationInvite
+    summary: Cancel/recall an invite that has not been accepted yet.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/InviteIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  AcceptInvite:
+    tags: [Reservations]
+    operationId: acceptReservationInvite
+    summary: Accept a reservation invite via invite token.
+    description: |
+      Token is obtained from the invite delivery channel. The invitee must be authenticated;
+      if they are not yet a friend of the host they remain unchanged.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/InviteTokenPath'
+    responses:
+      '200':
+        description: Invite accepted; reservation included for client convenience.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invite:      { $ref: '../components/schemas.yaml#/components/schemas/ReservationInvite' }
+                reservation: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404':
+        description: Invite token invalid.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '409':
+        description: Invite already decided or expired.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              expired:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Invite expired, status: 409, code: invite_expired }
+              already:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Invite already decided, status: 409, code: invite_already_decided }
+
+  DeclineInvite:
+    tags: [Reservations]
+    operationId: declineReservationInvite
+    summary: Decline a reservation invite via invite token.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/InviteTokenPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  # ---------- QR check-in (customer scans table QR from confirmation) ----------
+
+  CheckInByQr:
+    tags: [Reservations]
+    operationId: checkInByQr
+    summary: Customer scans the table QR to self-check-in.
+    description: |
+      The QR carries `tableId` + `rotationVersion` + `payloadHash` + signed `validUntil`.
+      Server validates:
+        * QR matches table's current `qrCode.payloadHash`
+        * `rotationVersion` matches (rotated QR returns `qr_rotated`)
+        * Current time within `validFrom`/`validUntil`
+        * Reservation belongs to the same restaurant
+        * Reservation `(date, time)` is within the restaurant's grace window
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [qrPayload]
+            properties:
+              qrPayload: { type: string, minLength: 8, maxLength: 1024 }
+    responses:
+      '200':
+        description: Checked in. Reservation status is now `arrived`.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: QR invalid/rotated/out of window, or already checked in.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              rotated:
+                value: { type: 'https://errors.catchtable.example/conflict', title: QR rotated, status: 409, code: qr_rotated }
+              wrongTable:
+                value: { type: 'https://errors.catchtable.example/conflict', title: QR mismatch, status: 409, code: qr_table_mismatch }
+              outsideGrace:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Out of grace window, status: 409, code: qr_outside_grace_window }
+
+  # ---------- POS-side ----------
+
+  PosListReservations:
+    tags: [POS · Reservations, Reservations]
+    operationId: posListReservations
+    summary: POS calendar / floor plan reservation list.
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: from
+        in: query
+        schema: { type: string, format: date-time }
+      - name: to
+        in: query
+        schema: { type: string, format: date-time }
+      - name: status
+        in: query
+        explode: false
+        schema:
+          type: array
+          items: { type: string, enum: [requested, confirmed, declined, arrived, dining, bill_requested, bill, visited, cancelled, no_show] }
+      - name: tableId
+        in: query
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+      - $ref: '../components/common.yaml#/components/parameters/PageQuery'
+      - $ref: '../components/common.yaml#/components/parameters/PageSizeQuery'
+    responses:
+      '200':
+        description: Reservations.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/PageInfo'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+
+  PosApprove:
+    tags: [POS · Reservations, Reservations]
+    operationId: posApproveReservation
+    summary: Manager approves a `requested` reservation.
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              assignTableId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Reservation confirmed.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Not in `requested` state.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+
+  PosDecline:
+    tags: [POS · Reservations, Reservations]
+    operationId: posDeclineReservation
+    summary: Manager declines a `requested` reservation. Triggers deposit refund if any.
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Declined.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  PosCheckIn:
+    tags: [POS · Reservations, Reservations]
+    operationId: posCheckInReservation
+    summary: Staff manually checks in a guest from the floor plan.
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              tableId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+    responses:
+      '200':
+        description: Checked in.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  PosNoShow:
+    tags: [POS · Reservations, Reservations]
+    operationId: posMarkNoShow
+    summary: Mark reservation as no-show (after grace period).
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              forfeitDeposit: { type: boolean, default: true }
+              note:           { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Marked.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409':
+        description: Within grace window or already finished.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+            examples:
+              grace:
+                value: { type: 'https://errors.catchtable.example/conflict', title: Grace window not elapsed, status: 409, code: grace_elapsed, detail: 'cannot mark no-show before grace window' }
+
+  PosCancel:
+    tags: [POS · Reservations, Reservations]
+    operationId: posCancelReservation
+    summary: Restaurant-initiated cancellation (always refunds deposit).
+    security:
+      - staffAuth: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, maxLength: 500 }
+    responses:
+      '200':
+        description: Cancelled.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }

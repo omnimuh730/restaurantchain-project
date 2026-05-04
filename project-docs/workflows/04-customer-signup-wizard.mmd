@@ -1,0 +1,20 @@
+flowchart TD
+%% Five-step customer sign-up. Steps 1-4 collect data client-side; only Step 4
+%% submits. Step 4 questions are loaded from `metadata.security_questions`.
+    Start([Start sign-up]) --> S1["Step 1<br/>Referral code (optional)"]
+    S1 -->|Continue| S2["Step 2<br/>Username · Email · Phone · Password"]
+    S2 -->|"GET /auth/username-available"| AvCheck{"Username free?"}
+    AvCheck -- "false" --> S2
+    AvCheck -- "true" --> S3["Step 3<br/>Full name · DOB · Locale"]
+    S3 --> S4["Step 4<br/>Pick 3 security questions + answers"]
+    S4 -->|"GET /metadata/security_questions"| MetaQ[(metadata)]
+    S4 -->|"POST /auth/customer/sign-up"| API[API]
+    API --> Val{"Validate"}
+    Val -- "username_taken / email_taken / phone_taken" --> S2
+    Val -- "validation_failed (422)" --> S4
+    Val -- "referral_code_invalid" --> S1
+    Val -- "ok" --> S5["Step 5<br/>Sign-up success · auto sign-in"]
+    S5 --> Bonus{"First daily login<br/>bonus available?"}
+    Bonus -- yes --> DB["Daily Bonus modal<br/>POST /me/daily-bonus:claim"]
+    Bonus -- no --> Home["Discover home"]
+    DB --> Home

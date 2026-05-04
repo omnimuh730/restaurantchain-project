@@ -1,0 +1,145 @@
+[
+  {
+    "_id": "security_questions",
+    "description": "Pickable security questions for sign-up and password reset.",
+    "version": 1,
+    "items": [
+      { "code": "first_pet",      "label": "What was the name of your first pet?" },
+      { "code": "mother_maiden",  "label": "What is your mother's maiden name?" },
+      { "code": "first_school",   "label": "What was the name of your first school?" },
+      { "code": "favorite_movie", "label": "What is your favorite movie?" },
+      { "code": "first_city",     "label": "In what city were you born?" }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-08-01T00:00:00.000Z" }
+  },
+  {
+    "_id": "subscription_plans",
+    "description": "Subscription plan matrix for restaurant and customer subjects.",
+    "version": 4,
+    "items": [
+      { "subject": "restaurant", "tier": "free",  "name": "Free",         "price": { "amount": { "$numberDecimal": "0" },     "currency": "USD" }, "billingCycle": "monthly",   "trialDays": 0,  "features": ["Basic POS", "Up to 1 floor"], "sortOrder": 1 },
+      { "subject": "restaurant", "tier": "pro",   "name": "Pro",          "price": { "amount": { "$numberDecimal": "49" },    "currency": "USD" }, "billingCycle": "monthly",   "trialDays": 7,  "features": ["Multi floor", "Online reservations", "Analytics"], "sortOrder": 2 },
+      { "subject": "restaurant", "tier": "ultra", "name": "Ultra",        "price": { "amount": { "$numberDecimal": "129" },   "currency": "USD" }, "billingCycle": "monthly",   "trialDays": 7,  "features": ["Pro features", "Branded app", "Dedicated support"], "sortOrder": 3 },
+      { "subject": "customer",   "tier": "pro",   "name": "Pro Monthly",   "price": { "amount": { "$numberDecimal": "9.99" },  "currency": "USD" }, "billingCycle": "monthly",   "trialDays": 7,  "sortOrder": 1 },
+      { "subject": "customer",   "tier": "pro",   "name": "Pro Quarterly", "price": { "amount": { "$numberDecimal": "26.99" }, "currency": "USD" }, "billingCycle": "quarterly", "trialDays": 7,  "sortOrder": 2 },
+      { "subject": "customer",   "tier": "pro",   "name": "Pro Yearly",    "price": { "amount": { "$numberDecimal": "89.99" }, "currency": "USD" }, "billingCycle": "yearly",    "trialDays": 14, "sortOrder": 3, "badge": "Best Value" }
+    ],
+    "updatedBy": { "$oid": "65f0000000000000000a0001" },
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-02-01T00:00:00.000Z" }
+  },
+  {
+    "_id": "reward_tiers",
+    "description": "Loyalty tiers, thresholds, benefits.",
+    "version": 1,
+    "items": [
+      { "code": "silver",   "name": "Silver",   "threshold": 0,    "benefits": ["Standard support"],                       "pointsPerCurrency": 1.0, "currency": "USD" },
+      { "code": "gold",     "name": "Gold",     "threshold": 100,  "benefits": ["Priority booking"],                       "pointsPerCurrency": 1.0, "currency": "USD" },
+      { "code": "platinum", "name": "Platinum", "threshold": 500,  "benefits": ["Free dessert", "Premium support"],        "pointsPerCurrency": 1.5, "currency": "USD" },
+      { "code": "diamond",  "name": "Diamond",  "threshold": 2000, "benefits": ["Concierge", "Anniversary gift"],          "pointsPerCurrency": 2.0, "currency": "USD" }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-08-01T00:00:00.000Z" }
+  },
+  {
+    "_id": "amenities",
+    "description": "Amenity codes used by restaurants.amenities[] and the reservation preferences picker.",
+    "version": 2,
+    "items": [
+      { "code": "wifi",       "label": "Wi-Fi",         "icon": "wifi" },
+      { "code": "parking",    "label": "Parking",       "icon": "car" },
+      { "code": "outdoor",    "label": "Outdoor",       "icon": "tree" },
+      { "code": "wheelchair", "label": "Wheelchair",    "icon": "accessibility" },
+      { "code": "vegan",      "label": "Vegan options", "icon": "leaf" },
+      { "code": "private",    "label": "Private room",  "icon": "lock" }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-12T00:00:00.000Z" }
+  },
+  {
+    "_id": "reservation_preferences",
+    "description": "Preference codes for the booking wizard step 2.",
+    "version": 1,
+    "items": [
+      { "group": "seating",  "code": "indoor",   "label": "Indoor" },
+      { "group": "seating",  "code": "outdoor",  "label": "Outdoor" },
+      { "group": "seating",  "code": "bar",      "label": "Bar" },
+      { "group": "seating",  "code": "private",  "label": "Private room" },
+      { "group": "cuisine",  "code": "korean",   "label": "Korean" },
+      { "group": "cuisine",  "code": "japanese", "label": "Japanese" },
+      { "group": "cuisine",  "code": "italian",  "label": "Italian" },
+      { "group": "cuisine",  "code": "french",   "label": "French" },
+      { "group": "vibe",     "code": "cozy",     "label": "Cozy" },
+      { "group": "vibe",     "code": "lively",   "label": "Lively" },
+      { "group": "vibe",     "code": "romantic", "label": "Romantic" },
+      { "group": "vibe",     "code": "casual",   "label": "Casual" }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-08-01T00:00:00.000Z" }
+  },
+  {
+    "_id": "occasions",
+    "description": "Reservation occasions.",
+    "version": 1,
+    "items": [
+      { "code": "anniversary",  "label": "Anniversary",  "emoji": "💍" },
+      { "code": "birthday",     "label": "Birthday",     "emoji": "🎂" },
+      { "code": "date_night",   "label": "Date Night",   "emoji": "💕" },
+      { "code": "business",     "label": "Business",     "emoji": "💼" },
+      { "code": "casual",       "label": "Casual",       "emoji": "🍽" },
+      { "code": "celebration",  "label": "Celebration",  "emoji": "🎉" }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-08-01T00:00:00.000Z" }
+  },
+  {
+    "_id": "support_articles",
+    "description": "Help-center articles available via Profile > Help & Support.",
+    "version": 7,
+    "items": [
+      {
+        "slug": "how-to-cancel-reservation",
+        "title": "How to cancel a reservation",
+        "category": "reservations",
+        "tags": ["cancel", "refund", "grace"],
+        "bodyMarkdown": "Open the reservation in **Dining**, tap the action menu and choose *Cancel*. The refund follows the restaurant's policy.",
+        "relatedSlugs": ["refund-policy"],
+        "updatedAt": { "$date": "2026-04-15T00:00:00.000Z" }
+      },
+      {
+        "slug": "refund-policy",
+        "title": "Refund policy",
+        "category": "payments",
+        "tags": ["refund", "wallet", "deposit"],
+        "bodyMarkdown": "Deposits are fully refundable up to 24 hours before your reservation. Within 24 hours, the restaurant decides per their policy.",
+        "relatedSlugs": ["how-to-cancel-reservation"],
+        "updatedAt": { "$date": "2026-03-30T00:00:00.000Z" }
+      },
+      {
+        "slug": "topping-up-your-wallet",
+        "title": "Topping up your wallet",
+        "category": "wallet",
+        "tags": ["wallet", "top up", "bonus"],
+        "bodyMarkdown": "Open **Profile > Top Up**, choose KRW or USD, pick an amount and a payment method.",
+        "updatedAt": { "$date": "2026-02-10T00:00:00.000Z" }
+      }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-15T00:00:00.000Z" }
+  },
+  {
+    "_id": "feature_flags",
+    "description": "Runtime feature toggles.",
+    "version": 12,
+    "items": [
+      { "key": "ENABLE_WALLET_GIFTS",       "enabled": true,  "rolloutPercent": 100 },
+      { "key": "ENABLE_DAILY_BONUS",        "enabled": true,  "rolloutPercent": 100 },
+      { "key": "ENABLE_FRIEND_INVITES",     "enabled": true,  "rolloutPercent": 100 },
+      { "key": "ENABLE_KITCHEN_REALTIME",   "enabled": true,  "rolloutPercent": 100 },
+      { "key": "ENABLE_QR_ROTATION_AUTO",   "enabled": false, "rolloutPercent": 0 }
+    ],
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-20T00:00:00.000Z" }
+  }
+]

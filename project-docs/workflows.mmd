@@ -1,0 +1,1145 @@
+%% =============================================================================
+%% CatchTable API Workflows — Mermaid Diagram CATALOG (not a single diagram)
+%% =============================================================================
+%%
+%% !!! THIS FILE CONTAINS 30 DIAGRAMS, ONE AFTER THE OTHER !!!
+%% A strict Mermaid parser expects ONE diagram per file and will fail with:
+%%     "Parse error on line 47: ... Expecting 'NEWLINE','SPACE','GRAPH'"
+%% as soon as it reaches the second `flowchart`/`sequenceDiagram` declaration.
+%%
+%% TO RENDER, USE ONE OF:
+%%   1. workflows/NN-name.mmd  — each diagram as its own valid `.mmd` file
+%%      (drop into Mermaid Live, mmdc, GitHub, Cursor preview, etc.)
+%%   2. workflows.md           — every diagram embedded as a ```mermaid block
+%%      (renders inline in GitHub, VS Code, Notion, Obsidian, etc.)
+%%   3. workflows/_render.mjs  — `npm run render` to emit SVGs via mmdc
+%%
+%% Layout rule (so strict parsers accept copy-pasted blocks): every diagram
+%% block in this file starts with the diagram-type line (`flowchart TD`,
+%% `sequenceDiagram`, `stateDiagram-v2`, `erDiagram`); any `%%` comments
+%% follow on later lines. Comments BEFORE the type line break some
+%% renderers (older Mermaid bundles, certain VS Code extensions).
+%%
+%% Scope: every workflow in `docs/api-docs/page-driven/` — the multi-tenant POS
+%%        + customer-facing reservation API for CatchTable. Sources:
+%%
+%%        - openapi/openapi.yaml + paths/*.yaml + components/*.yaml
+%%        - schema/*.md (the 13-collection compromise schema)
+%%        - reservation/*/README.md (customer-app page-driven specs)
+%%        - pos/*/README.md         (POS-app page-driven specs)
+%%
+%% Documented terms used throughout:
+%%   reservation.status      = requested | confirmed | declined | arrived
+%%                             | dining | bill_requested | bill | visited
+%%                             | cancelled | no_show
+%%   reservation.invite      = pending | accepted | declined | expired
+%%   order.items[].chefStatus= draft | sent | in_progress | ready | voided
+%%   order.batches[].status  = sent | in_progress | ready | mixed
+%%   payments.status         = succeeded | voided
+%%   paymentIntent.status    = requires_payment | processing | succeeded
+%%                             | failed | cancelled
+%%   refund.status           = pending | succeeded | failed
+%%   subscription.status     = trialing | active | past_due | cancelled | expired
+%%   invoice.status          = open | paid | uncollectible | voided
+%%   support.status          = open | pending_user | pending_agent | resolved
+%%                             | closed
+%%   table.status            = available | reserved | occupied
+%%                             | needs_cleaning | out_of_service
+%%   staff.status            = pending_approval | active | inactive | rejected
+%%   restaurant.status       = pending_approval | active | suspended
+%%   restaurant.tier         = free | pro | ultra
+%%   reward.tier             = silver | gold | platinum | diamond
+%% =============================================================================
+
+
+%% --- BEGIN: 01-api-map -------------------------------------------------------
+flowchart TD
+%% High-level surface map. Two front-end actors (customer mobile + POS staff)
+%% talk to nine logical API tag groups; the API persists into the 13-collection
+%% Mongo store and pushes realtime events back to both apps.
+    Cust["Customer mobile app"]:::actor
+    Pos["POS staff app<br/>manager / waiter / chef / cashier"]:::actor
+    Anon["Anonymous browser"]:::actor
+
+    subgraph Public["Public surface"]
+        AuthSvc["Auth<br/>/auth/customer/* · /auth/staff/* · /auth/refresh<br/>/auth/sign-out · /auth/password-reset/*"]
+        Meta["Metadata<br/>/metadata/{catalog}"]
+        Disc["Discovery<br/>/discover · /restaurants · /restaurants/{id}<br/>/restaurants/{id}/menu · /availability"]
+    end
+
+    subgraph CustomerAPI["Customer API · customerAuth bearer"]
+        Prof["Profile<br/>/me · devices · payment-methods · password"]
+        Soc["Social<br/>saved-items · recent-searches · friends<br/>daily-bonus · referral"]
+        Wall["Wallets<br/>balances · top-up · gift · transactions"]
+        Rew["Rewards<br/>tier · points · ledger"]
+        Notif["Notifications<br/>list · read · delete"]
+        Sup["Support<br/>conversations · messages"]
+        CSub["Subscription<br/>CatchTable Pro"]
+        Res["Reservations<br/>list · draft · create · cancel · invite<br/>QR check-in · rate"]
+    end
+
+    subgraph PosAPI["POS API · staffAuth bearer scoped to restaurantId"]
+        PR["Restaurant<br/>settings · phones · deposit-cards · staff<br/>floors · menu"]
+        PT["Tables<br/>CRUD · status · QR rotation"]
+        PO["Orders<br/>open · items · send-batch · bill · void · pay"]
+        PK["Kitchen<br/>batches · accept · complete · recall"]
+        PP["Payments<br/>list · get · refunds"]
+        PA["Analytics<br/>sales · revenue · menu · customers · history"]
+        PSub["Restaurant Subscription<br/>tier · invoices"]
+        PRes["POS Reservations<br/>list · approve · decline · check-in · no-show · cancel"]
+    end
+
+    DB[("MongoDB<br/>13 collections")]:::store
+
+    Anon --> AuthSvc
+    Anon --> Meta
+    Anon --> Disc
+
+    Cust --> AuthSvc
+    Cust --> CustomerAPI
+    Cust --> Disc
+    Cust --> Meta
+    Cust --> Res
+
+    Pos --> AuthSvc
+    Pos --> PosAPI
+    Pos --> Meta
+
+    AuthSvc --> DB
+    Meta --> DB
+    Disc --> DB
+    CustomerAPI --> DB
+    PosAPI --> DB
+    Res --> DB
+
+    DB -. "ws push<br/>(see realtime channels diag.)" .-> Cust
+    DB -. "ws push" .-> Pos
+
+    classDef actor fill:#fce8b2,stroke:#a87a00,color:#3a2a00
+    classDef store fill:#dcefe1,stroke:#2f6e43,color:#0d3a1d
+%% --- END: 01-api-map ---------------------------------------------------------
+
+
+%% --- BEGIN: 02-er-diagram ----------------------------------------------------
+erDiagram
+%% The 13-collection compromise schema. Lines marked with `||--o{` mean
+%% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
+%% Cache fields living on `customer_users` (wallets, rewards, notifUnread) are
+%% kept in sync atomically with the authoritative ledger collections.
+    customer_users ||--o{ reservations : "places"
+    customer_users ||--o{ wallet_transactions : "owns ledger"
+    customer_users ||--o{ points_ledger : "owns ledger"
+    customer_users ||--o{ payments : "pays"
+    customer_users ||--o{ subscriptions : "may have Pro"
+    customer_users ||--o{ notifications : "receives"
+    customer_users ||--o{ support_conversations : "opens"
+
+    restaurants ||--o{ reservations : "hosts"
+    restaurants ||--o{ orders : "operates"
+    restaurants ||--o{ payments : "captures"
+    restaurants ||--o{ subscriptions : "may have tier"
+    restaurants ||--o{ notifications : "receives"
+
+    reservations ||--o| orders : "may open one"
+    reservations ||--o{ payments : "deposits + bills"
+
+    orders ||--o{ payments : "settles"
+
+    subscriptions ||--o{ payments : "invoices"
+    subscriptions ||--o{ wallet_transactions : "subscription_charge"
+
+    wallet_transactions }o--|| payments : "links to"
+    points_ledger }o--|| wallet_transactions : "may twin"
+
+    support_conversations ||--o{ support_messages : "contains"
+
+    metadata ||..|| customer_users : "static catalogs"
+    metadata ||..|| restaurants : "static catalogs"
+
+    customer_users {
+        ObjectId _id
+        string username
+        string email
+        string phone
+        object wallets       "cache · 3 pools"
+        object rewards       "cache · tier+points"
+        int    notifUnreadCount
+        array  paymentMethods
+        array  devices
+        array  savedItems
+        array  recentSearches
+        array  friends
+        object referral
+        object dailyBonus
+    }
+    restaurants {
+        ObjectId _id
+        string name
+        string status
+        string tier
+        object settings
+        array  phones
+        array  depositCards
+        array  staff
+        array  floors           "tables embedded inside"
+        object menu             "categories+items embedded"
+    }
+    reservations {
+        ObjectId _id
+        ObjectId customerUserId
+        ObjectId restaurantId
+        ObjectId orderId
+        ObjectId paymentId
+        string   status
+        array    invites
+        array    timeline
+    }
+    orders {
+        ObjectId _id
+        ObjectId restaurantId
+        ObjectId tableId
+        ObjectId reservationId
+        string   status
+        array    items          "with chefStatus per item"
+        array    batches        "kitchen batches"
+        object   totals
+    }
+    payments {
+        ObjectId _id
+        string   purpose
+        string   status
+        ObjectId reservationId
+        ObjectId orderId
+        ObjectId topUpId
+        ObjectId subscriptionId
+        object   amount
+        object   intent          "PSP timeline"
+        array    refunds
+    }
+    wallet_transactions {
+        ObjectId _id
+        ObjectId customerUserId
+        string   pool
+        string   type
+        string   direction
+        decimal  amount
+        decimal  balanceAfter
+    }
+    points_ledger {
+        ObjectId _id
+        ObjectId customerUserId
+        string   reason
+        string   direction
+        int      points
+        int      balanceAfter
+    }
+    notifications {
+        ObjectId _id
+        string   recipientKind
+        ObjectId customerUserId
+        ObjectId staffUserId
+        string   type
+        bool     read
+    }
+    support_conversations {
+        ObjectId _id
+        string   subjectKind
+        string   status
+        string   priority
+    }
+    support_messages {
+        ObjectId _id
+        ObjectId conversationId
+        string   senderKind
+        string   body
+    }
+    subscriptions {
+        ObjectId _id
+        string   product
+        string   planCode
+        string   status
+        array    invoices
+        array    history
+    }
+    sessions {
+        ObjectId _id
+        ObjectId userId
+        string   refreshTokenHash
+        date     expiresAt
+    }
+    metadata {
+        string   _id            "catalog code · PK"
+        array    items
+        int      version
+    }
+%% --- END: 02-er-diagram ------------------------------------------------------
+
+
+%% --- BEGIN: 03-auth-token-lifecycle ------------------------------------------
+sequenceDiagram
+%% Sign-in returns short-lived `accessToken` + long-lived `refreshToken`.
+%% The client transparently refreshes on `token_expired` (401). Sign-out
+%% revokes the refresh row in `sessions`.
+    autonumber
+    participant App as Client app
+    participant API as CatchTable API
+    participant Sess as sessions (TTL)
+    participant Users as customer_users / staff (in restaurants)
+
+    App->>API: POST /auth/{customer|staff}/sign-in<br/>{ username, password, device }
+    API->>Users: lookup + verify hash
+    alt invalid credentials
+        API-->>App: 401 invalid_credentials
+    else account inactive
+        API-->>App: 403 account_inactive
+    else pending_approval
+        API-->>App: 403 account_pending_approval
+    else success
+        API->>Sess: insert refreshTokenHash (TTL ~30d)
+        API-->>App: 200 { accessToken (15m), refreshToken (30d), user }
+    end
+
+    Note over App,API: Subsequent calls send `Authorization: Bearer <accessToken>`.
+
+    App->>API: GET /me   (Bearer expired)
+    API-->>App: 401 token_expired
+
+    App->>API: POST /auth/refresh { refreshToken }
+    API->>Sess: validate + rotate
+    alt rotation success
+        API-->>App: 200 { new accessToken, new refreshToken }
+    else reuse / revoked
+        API-->>App: 401 unauthenticated  (force sign-out)
+    end
+
+    App->>API: POST /auth/sign-out
+    API->>Sess: delete row
+    API-->>App: 204
+%% --- END: 03-auth-token-lifecycle --------------------------------------------
+
+
+%% --- BEGIN: 04-customer-signup-wizard ----------------------------------------
+flowchart TD
+%% Five-step customer sign-up. Steps 1-4 collect data client-side; only Step 4
+%% submits. Step 4 questions are loaded from `metadata.security_questions`.
+    Start([Start sign-up]) --> S1["Step 1<br/>Referral code (optional)"]
+    S1 -->|Continue| S2["Step 2<br/>Username · Email · Phone · Password"]
+    S2 -->|"GET /auth/username-available"| AvCheck{"Username free?"}
+    AvCheck -- "false" --> S2
+    AvCheck -- "true" --> S3["Step 3<br/>Full name · DOB · Locale"]
+    S3 --> S4["Step 4<br/>Pick 3 security questions + answers"]
+    S4 -->|"GET /metadata/security_questions"| MetaQ[(metadata)]
+    S4 -->|"POST /auth/customer/sign-up"| API[API]
+    API --> Val{"Validate"}
+    Val -- "username_taken / email_taken / phone_taken" --> S2
+    Val -- "validation_failed (422)" --> S4
+    Val -- "referral_code_invalid" --> S1
+    Val -- "ok" --> S5["Step 5<br/>Sign-up success · auto sign-in"]
+    S5 --> Bonus{"First daily login<br/>bonus available?"}
+    Bonus -- yes --> DB["Daily Bonus modal<br/>POST /me/daily-bonus:claim"]
+    Bonus -- no --> Home["Discover home"]
+    DB --> Home
+%% --- END: 04-customer-signup-wizard ------------------------------------------
+
+
+%% --- BEGIN: 05-password-reset ------------------------------------------------
+sequenceDiagram
+%% Three-step reset using a security question. The server returns a short-lived
+%% reset token after step 2; step 3 must include it.
+    autonumber
+    actor User
+    participant App as Client app
+    participant API as Auth service
+
+    User->>App: "Forgot password"
+    App->>API: POST /auth/password-reset/start<br/>{ username }
+    alt unknown
+        API-->>App: 404 not_found  (UI shows generic message)
+    else found
+        API-->>App: 200 { questionId, attemptsRemaining }
+    end
+
+    User->>App: types answer
+    App->>API: POST /auth/password-reset/verify-question<br/>{ username, questionId, answer }
+    alt wrong
+        API-->>App: 401 security_answer_invalid<br/>(attemptsRemaining-1)
+    else exhausted
+        API-->>App: 423 security_answer_attempts_exceeded
+    else ok
+        API-->>App: 200 { resetToken (10m), resetTokenExpiresAt }
+    end
+
+    User->>App: enters new password
+    App->>API: POST /auth/password-reset/complete<br/>{ resetToken, newPassword }
+    alt expired
+        API-->>App: 401 reset_token_expired
+    else weak
+        API-->>App: 422 password_policy_violation
+    else ok
+        API-->>App: 200 (auto sign-in)
+    end
+%% --- END: 05-password-reset --------------------------------------------------
+
+
+%% --- BEGIN: 06-staff-onboarding ----------------------------------------------
+sequenceDiagram
+%% Two paths: a manager registers a NEW restaurant, or staff request to JOIN an
+%% existing restaurant. Both end pending until manager approves.
+    autonumber
+    actor Mgr as Manager (new restaurant)
+    actor Stf as Staff (joining)
+    participant API as API
+    participant R as restaurants
+
+    %% Path A — restaurant + manager combined
+    Mgr->>API: POST /auth/staff/sign-up/restaurant<br/>{ restaurant{...}, manager{...} }
+    API->>R: insert with status=pending_approval, tier=free
+    API-->>Mgr: 201 { user, restaurant.status=pending_approval }
+    Note over Mgr,API: Mgr lands on "approval wait" screen and polls.
+
+    %% Path B — staff requesting to join
+    Stf->>API: POST /auth/staff/sign-up/staff<br/>{ restaurantId, profile, requestedRole }
+    API->>R: push pending_request (status=pending_approval)
+    API-->>Stf: 201 { request.status=pending_approval }
+
+    %% Manager approval (path B continues)
+    Mgr->>API: GET /pos/restaurants/{rid}/staff/pending
+    API-->>Mgr: list of pending requests
+    Mgr->>API: POST /pos/.../staff/pending/{requestId}:approve<br/>{ role, permissions[] }
+    API->>R: move into staff[] with status=active
+    API-->>Mgr: 200
+    API-->>Stf: ws restaurant.staff.pending → access granted
+%% --- END: 06-staff-onboarding ------------------------------------------------
+
+
+%% --- BEGIN: 07-discovery-to-booking ------------------------------------------
+flowchart TD
+%% End-to-end customer booking journey. Source: reservation/Discover, Explorer,
+%% Reservation Flow READMEs + paths/discovery.yaml + paths/reservations.yaml.
+    Home["Discover home<br/>GET /discover"] -->|"tap card"| Detail["Restaurant page<br/>GET /restaurants/{id}<br/>GET /restaurants/{id}/menu"]
+    Map["Explorer map<br/>GET /restaurants?bbox=..."] --> Detail
+    Search["Search<br/>GET /restaurants?q=..."] --> Detail
+    Saved["Saved (heart)<br/>GET /me/saved-items"] --> Detail
+    Dining["Dining → Book Again<br/>GET /me/reservations"] --> Detail
+
+    Detail -->|"Reserve"| W1["Wizard Step 1<br/>guests · date · time<br/>GET /availability"]
+    W1 --> W2["Step 2<br/>contact · occasion · requests"]
+    W2 --> W3["Step 3<br/>preferences"]
+    W3 --> W4["Step 4<br/>review · upfront pay"]
+
+    W1 -. "PUT /me/active-draft" .-> Draft[("active draft<br/>TTL")]
+    W2 -. "PUT /me/active-draft" .-> Draft
+    W3 -. "PUT /me/active-draft" .-> Draft
+
+    W4 -->|"POST /reservations<br/>(idempotent)"| Confirm{"Validate +<br/>charge deposit"}
+    Confirm -- "seat_not_available" --> W1
+    Confirm -- "deposit_required" --> W4
+    Confirm -- "payment_failed / declined" --> W4
+    Confirm -- "ok" --> Done["status=requested<br/>navigate to Dining → Reservation"]
+    Done -. "ws reservation.created" .-> POSStaff[POS dashboard]
+%% --- END: 07-discovery-to-booking --------------------------------------------
+
+
+%% --- BEGIN: 08-reservation-state-machine -------------------------------------
+stateDiagram-v2
+%% Reservation lifecycle. Status enum lifted verbatim from the OpenAPI schema.
+%% The "*_by_*" labels on transitions mirror reservation.timeline.entries[].type.
+    [*] --> requested : POST /reservations<br/>customer pays deposit
+
+    requested --> confirmed : POS approve<br/>(auto-approve possible)
+    requested --> declined  : POS decline<br/>+ refund deposit
+    requested --> cancelled : customer cancel<br/>before grace deadline
+
+    confirmed --> arrived       : QR check-in<br/>(customer or POS)
+    confirmed --> cancelled     : customer cancel<br/>(may be too_late_to_cancel)
+    confirmed --> no_show       : grace_elapsed<br/>(POS or system)
+
+    arrived --> dining          : table seated<br/>POS opens order
+    dining  --> bill_requested  : "Request bill" tap
+    bill_requested --> bill     : POS finalize-bill
+    bill --> visited            : POS confirm payment
+
+    declined  --> [*]
+    cancelled --> [*]
+    no_show   --> [*]
+    visited   --> [*]
+
+    note right of requested
+      Errors:
+        seat_not_available
+        party_too_large/small
+        deposit_required
+        currency_mismatch
+    end note
+    note right of cancelled
+      too_late_to_cancel · 409
+      reservation_already_cancelled · 409
+    end note
+%% --- END: 08-reservation-state-machine ---------------------------------------
+
+
+%% --- BEGIN: 09-invite-flow ---------------------------------------------------
+stateDiagram-v2
+%% Reservation invites: host sends, recipient accepts/declines. Each invite
+%% has its own status independent of the parent reservation.
+    [*] --> pending : host posts invite (shareLink + token)
+    pending --> accepted : invitee accepts via /invites/.../accept
+    pending --> declined : invitee declines via /invites/.../decline
+    pending --> expired  : reservation cancelled or expiresAt elapsed
+    pending --> [*] : host deletes the invite
+
+    accepted --> [*]
+    declined --> [*]
+    expired  --> [*]
+
+    note right of pending
+      cannot_invite_self · 422
+      invite_already_decided · 409
+      invite_expired · 410
+    end note
+%% --- END: 09-invite-flow -----------------------------------------------------
+
+
+%% --- BEGIN: 10-qr-checkin ----------------------------------------------------
+sequenceDiagram
+%% QR-based check-in. The customer scans the table QR; the API validates the
+%% rotated code, the grace window, and the table identity.
+    autonumber
+    actor Cust as Customer
+    participant App as Mobile app
+    participant API as API
+    participant Tbl as table.qrCode (rotating)
+    participant Res as reservation
+
+    Cust->>App: scan QR sticker
+    App->>API: POST /reservations/{rid}:check-in-by-qr<br/>{ qr: "<rotated-token>" }
+    API->>Tbl: validate token + currentVersion
+    alt qr_invalid
+        API-->>App: 400 qr_invalid
+    else qr_rotated
+        API-->>App: 409 qr_rotated  (try again)
+    else qr_table_mismatch
+        API-->>App: 409 qr_table_mismatch  (wrong table)
+    else qr_outside_grace_window
+        API-->>App: 409 qr_outside_grace_window
+    else ok
+        API->>Res: status confirmed → arrived<br/>append timeline.checked_in
+        API-->>App: 200 { reservation, table }
+        API-->>App: ws reservation.updated
+        Note right of API: POS staff also receives<br/>reservation.updated +<br/>table.updated.
+    end
+%% --- END: 10-qr-checkin ------------------------------------------------------
+
+
+%% --- BEGIN: 11-pos-reservation-staff -----------------------------------------
+sequenceDiagram
+%% Staff-side counterpart actions. Each action appends a `timeline` entry.
+    autonumber
+    actor Pos as POS staff
+    participant API as API
+    participant Res as reservation
+    participant Pay as payments
+
+    Pos->>API: GET /pos/restaurants/{rid}/reservations?date=...
+    API-->>Pos: list grouped by status
+
+    rect rgb(232,244,255)
+    note right of Pos: APPROVE  (status=requested → confirmed)
+    Pos->>API: POST /pos/reservations/{rid}:approve<br/>(Idempotency-Key)
+    API->>Res: confirmed
+    API-->>Pos: 200
+    end
+
+    rect rgb(255,232,232)
+    note right of Pos: DECLINE → automatic deposit refund
+    Pos->>API: POST /pos/reservations/{rid}:decline { reason }
+    API->>Pay: create refund (reason=reservation_declined)
+    API->>Res: declined
+    API-->>Pos: 200
+    end
+
+    rect rgb(255,243,204)
+    note right of Pos: NO-SHOW  (after grace_elapsed)
+    Pos->>API: POST /pos/reservations/{rid}:no-show { waiveDeposit?: bool }
+    opt waive
+        API->>Pay: refund (reason=no_show_waiver)
+    end
+    API->>Res: no_show
+    end
+
+    rect rgb(228,245,228)
+    note right of Pos: SEAT  (POS-driven check-in alternative)
+    Pos->>API: POST /pos/reservations/{rid}:check-in
+    API->>Res: arrived → dining (when order opens)
+    end
+%% --- END: 11-pos-reservation-staff -------------------------------------------
+
+
+%% --- BEGIN: 12-order-lifecycle -----------------------------------------------
+flowchart TD
+%% Single order document covers draft → sent → bill → paid. Chef tickets are
+%% NOT a separate collection; they are derived from order.batches[] +
+%% order.items[].chefStatus.
+    Open(["POST /pos/restaurants/{rid}/orders<br/>or auto on first item"])
+    Open --> S0["status=open<br/>(no items)"]
+
+    S0 -->|"POST /pos/orders/{oid}/items<br/>(chefStatus=draft)"| S1["open · draft items only"]
+    S1 -->|"PATCH item · DELETE draft item"| S1
+    S1 -->|"POST /pos/orders/{oid}:send-batch<br/>{ itemIds[] }"| S2["open · sent batch<br/>chefStatus=sent"]
+
+    S2 -->|"add more drafts"| S1
+    S2 -->|"PATCH /items/{iid} (already sent) → delta batch"| S2
+    S2 -->|"POST /items/{iid}:void  (cannot_void_after_send if too late)"| S2
+
+    S2 -->|"POST /pos/orders/{oid}:request-bill"| S3["bill_requested"]
+    S3 -->|"POST :finalize-bill"| S4["bill (totals frozen)"]
+    S4 -->|"POST /pos/orders/{oid}/payments  (cash · credit · mix · wallet)"| S5["paid"]
+
+    S2 -->|"POST :void  (manager only)"| Sx["voided"]
+    S3 --> Sx
+
+    S5 --> tableFlip[("table.status<br/>→ available<br/>after takeaway")]
+    style Sx fill:#fee
+%% --- END: 12-order-lifecycle -------------------------------------------------
+
+
+%% --- BEGIN: 13-order-item-state ----------------------------------------------
+stateDiagram-v2
+%% Per-item state. `voided` is a terminal sink reachable from any pre-served
+%% state; `recall` resurrects a `ready`/served item to in_progress.
+    [*] --> draft : add to ticket
+    draft --> sent : send-batch
+    draft --> [*] : DELETE draft (still on ticket)
+    sent --> in_progress : kitchen accepts batch
+    in_progress --> ready : kitchen completes item
+    ready --> in_progress : kitchen recalls item
+    ready --> [*] : served — consumed by bill
+
+    sent --> voided : POS voids (cannot_void_after_send if cooked)
+    in_progress --> voided : manager override
+    draft --> voided : auto when order voided
+    voided --> [*]
+
+    note right of sent
+      Errors on void:
+        cannot_void_after_send · 409
+        chef_batch_already_completed · 409
+    end note
+%% --- END: 13-order-item-state ------------------------------------------------
+
+
+%% --- BEGIN: 14-kitchen-board -------------------------------------------------
+sequenceDiagram
+%% Three lanes are derived views, not collections. Every action mutates
+%% order.batches[] / order.items[].chefStatus and broadcasts a ws event.
+    autonumber
+    actor Wt as Waiter (Orders)
+    actor Ch as Chef (Kitchen)
+    participant API as API
+    participant Order as orders[oid]
+
+    Wt->>API: POST /pos/orders/{oid}:send-batch { itemIds[] }
+    API->>Order: append batch (status=sent)<br/>items[*].chefStatus=sent
+    API-->>Ch: ws order.batch.sent → Received lane
+
+    Ch->>API: POST /pos/orders/{oid}/batches/{bid}:accept
+    API->>Order: batch.status=in_progress<br/>items[*].chefStatus=in_progress
+    API-->>Wt: ws order.batch.accepted
+    API-->>Ch: ws order.batch.accepted → In Progress lane
+
+    loop per item
+        Ch->>API: POST /pos/orders/{oid}/items/{iid}:complete
+        API->>Order: item.chefStatus=ready
+        API-->>Wt: ws order.item.updated
+    end
+
+    Note over API,Order: When all non-voided items in a batch are ready,<br/>batch.status=ready (or "mixed" while partial).
+
+    Ch->>API: POST /pos/orders/{oid}/items/{iid}:recall
+    API->>Order: item.chefStatus=in_progress
+    API-->>Wt: ws order.item.updated  ("ready" undone)
+
+    Wt->>API: POST /pos/orders/{oid}/items/{iid}:void
+    alt cannot_void_after_send
+        API-->>Wt: 409 cannot_void_after_send
+    else ok
+        API->>Order: item.chefStatus=voided
+        API-->>Ch: ws order.item.voided  (gray out)
+    end
+%% --- END: 14-kitchen-board ---------------------------------------------------
+
+
+%% --- BEGIN: 15-pos-payment-flow ----------------------------------------------
+sequenceDiagram
+%% Three method modes. The bill must be finalized first. Currencies are
+%% independent (KRW + USD); both must be fully covered before status flips.
+    autonumber
+    actor Cs as Cashier
+    actor Guest
+    participant App as POS app
+    participant API as API
+    participant PSP as PSP (Stripe / Toss)
+
+    Cs->>App: tap "Pay" on bill
+    App->>API: POST /pos/orders/{oid}/payments<br/>{ method, ...amounts }<br/>Idempotency-Key
+
+    alt method = cash
+        Note over App,API: cashier inputs `received` per currency
+        API->>API: validate `received >= due`<br/>else tendered_too_low
+        API-->>App: 200 payment.status=succeeded
+    else method = credit
+        API->>PSP: create checkout (KRW + USD)
+        PSP-->>App: qrUrl + paymentIntentId
+        App-->>Guest: show QR
+        Guest-->>PSP: pays
+        PSP-->>API: webhook intent.succeeded
+        API->>API: payment.status=succeeded
+        API-->>App: ws payment.captured
+    else method = mix
+        Note over App,API: cash portion + credit portion per currency<br/>cash + credit must equal due else mix_total_mismatch
+        API->>PSP: credit half only
+        PSP-->>API: webhook (succeeded / failed)
+        API-->>App: 200 / 402 payment_declined
+    else wallet (subscription/top-up)
+        API->>API: debit wallet pool · ledger entry<br/>else wallet_insufficient_balance
+    end
+
+    API-->>App: order.status=paid · table.updated → available
+%% --- END: 15-pos-payment-flow ------------------------------------------------
+
+
+%% --- BEGIN: 16-refund-flow ---------------------------------------------------
+stateDiagram-v2
+%% Refunds always go through the original `payments` document. Each refund row
+%% has its own status timeline and either a wallet-credit or PSP refund.
+    [*] --> pending : POST /pos/payments/{pid}/refunds<br/>{ amount, reason }
+    pending --> succeeded : PSP refund.succeeded<br/>or wallet credit committed
+    pending --> failed : PSP refund.failed<br/>(retryable)
+    failed --> pending : retry (same or new refund row)
+
+    succeeded --> [*]
+    failed --> [*] : give up
+
+    note right of pending
+      reason ∈ {
+        reservation_declined,
+        user_cancelled,
+        no_show_waiver,
+        order_voided,
+        duplicate, other
+      }
+      refund_exceeds_net_amount · 422
+      refund_already_succeeded · 409
+    end note
+%% --- END: 16-refund-flow -----------------------------------------------------
+
+
+%% --- BEGIN: 17-wallet-topup-async --------------------------------------------
+sequenceDiagram
+%% Top-up uses the PSP. The `wallet_transactions` row is "draft" until the PSP
+%% webhook commits it; clients can poll GetTopUp or wait for the ws event.
+    autonumber
+    actor U as Customer
+    participant App as Mobile app
+    participant API as API
+    participant Pay as payments
+    participant Ledger as wallet_transactions
+    participant PSP as PSP
+
+    U->>App: pick pool (domestic|foreign) + amount + paymentMethod
+    App->>API: POST /me/wallets/{pool}/top-up<br/>{ amount, paymentMethodId }<br/>Idempotency-Key
+    API->>Pay: insert (purpose=wallet_top_up, status=processing)
+    API->>Ledger: insert DRAFT row (uncommitted)
+    API->>PSP: create paymentIntent
+    API-->>App: 202 { topUpId, intent.clientSecret }
+
+    App->>PSP: confirm via SDK (3DS / Apple Pay / etc.)
+
+    par webhook
+        PSP-->>API: webhook intent.succeeded
+        API->>Pay: status=succeeded
+        API->>Ledger: COMMIT row · update customer_users.wallets cache
+        API-->>App: ws wallet.transaction.created · user.wallets.updated
+    and poll fallback
+        App->>API: GET /me/wallets/top-ups/{topUpId}
+        API-->>App: status=succeeded|processing|failed
+    end
+
+    alt webhook says failed
+        PSP-->>API: webhook intent.payment_failed
+        API->>Pay: status=voided
+        API->>Ledger: drop DRAFT (no balance change)
+        API-->>App: ws — UI shows error
+    else user cancels in time
+        App->>API: POST /me/wallets/top-ups/{topUpId}:cancel
+        alt already settled
+            API-->>App: 409
+        else ok
+            API->>Pay: status=voided · 204
+        end
+    end
+%% --- END: 17-wallet-topup-async ----------------------------------------------
+
+
+%% --- BEGIN: 18-ledger-cache-pattern ------------------------------------------
+flowchart LR
+%% The same pattern is used for both wallets and rewards: an immutable ledger
+%% collection plus a hot cache embedded on the user document. The cache is
+%% updated atomically with each ledger insert (multi-doc tx).
+    subgraph Reads["Hot reads"]
+        R1["GET /me/wallets"]
+        R2["GET /me/rewards"]
+    end
+    subgraph Writes["Authoritative writes"]
+        W1["POST /me/wallets/.../top-up"]
+        W2["POST /me/wallets/.../gift"]
+        W3["POST orders/{oid}/payments  (wallet)"]
+        W4["system: reservation_completed,<br/>review, daily-bonus, referral, etc."]
+    end
+
+    Cache[("customer_users.wallets<br/>customer_users.rewards<br/>(cache · O(1) read)")]
+    LedgerW[("wallet_transactions<br/>(append-only ledger)")]
+    LedgerP[("points_ledger<br/>(append-only ledger)")]
+
+    R1 --> Cache
+    R2 --> Cache
+
+    W1 -->|"insert ledger row<br/>+ update cache"| LedgerW
+    W2 --> LedgerW
+    W3 --> LedgerW
+    W4 -->|"may twin into both"| LedgerW
+    W4 --> LedgerP
+
+    LedgerW --> Cache
+    LedgerP --> Cache
+    LedgerW -. "GET /me/wallets/transactions<br/>(audit)" .-> Audit[Audit / dispute UI]
+    LedgerP -. "GET /me/rewards/points-ledger" .-> Audit
+%% --- END: 18-ledger-cache-pattern --------------------------------------------
+
+
+%% --- BEGIN: 19-subscription-state --------------------------------------------
+stateDiagram-v2
+%% One `subscriptions` collection covers BOTH product=catchtable_pro (per
+%% customer) and product=restaurant_tier (per restaurant). The state machine
+%% is identical; downstream effects (Pro perks vs. POS feature gates) differ.
+    [*] --> trialing : start (plan has trial)
+    [*] --> active   : start (no trial)
+
+    trialing --> active   : trial period ends — payment ok
+    trialing --> past_due : trial ends — payment fails
+    trialing --> cancelled : user or staff cancels
+
+    active --> past_due  : invoice payment_failed
+    active --> cancelled : cancel (cancelAtPeriodEnd=true)
+    active --> active    : change-plan (proration logged in history)
+    active --> active    : change-payment-method
+
+    past_due --> active    : retry succeeds
+    past_due --> cancelled : final retry fails — grace exhausted
+    past_due --> expired   : currentPeriodEnd elapsed unpaid
+
+    cancelled --> active : reactivate (within period)
+    cancelled --> expired : currentPeriodEnd elapsed
+    expired --> [*]
+
+    note right of past_due
+      subscription_past_due · 409
+      subscription_cannot_downgrade_with_balance · 409
+      subscription_change_in_flight · 409
+    end note
+%% --- END: 19-subscription-state ----------------------------------------------
+
+
+%% --- BEGIN: 20-invoice-state -------------------------------------------------
+stateDiagram-v2
+%% Invoices live embedded inside subscriptions[].invoices[]. The PSP retries
+%% on a backoff; staff/customers can view but not directly mutate.
+    [*] --> open : period rolls — system creates draft
+    open --> paid : webhook intent succeeded
+    open --> open : retry attempt (attemptCount++)
+    open --> uncollectible : final retry fails
+    open --> voided : cancel mid-cycle (proration credited)
+
+    paid --> [*]
+    uncollectible --> [*]
+    voided --> [*]
+%% --- END: 20-invoice-state ---------------------------------------------------
+
+
+%% --- BEGIN: 21-support-conversation ------------------------------------------
+stateDiagram-v2
+%% Status mirrors who has the ball. Channel is in_app_chat | email | phone.
+    [*] --> open : POST /me/support/conversations
+    open --> pending_agent : user posts message<br/>or system triage
+    pending_agent --> pending_user : agent replies
+    pending_user --> pending_agent : user replies
+    pending_user --> resolved : agent marks resolved
+    pending_agent --> resolved : agent marks resolved
+    resolved --> closed : 7 days no activity (auto)
+    resolved --> pending_user : user replies (re-opens)
+    closed --> [*]
+
+    note right of closed
+      conversation_closed · 409
+      message_too_long · 422
+    end note
+%% --- END: 21-support-conversation --------------------------------------------
+
+
+%% --- BEGIN: 22-notifications-fanout ------------------------------------------
+flowchart TD
+%% Notifications are created by domain events and fan out to:
+%%   1. in-app feed (always · `notifications` doc)
+%%   2. push (if device.isActive and channel includes 'push')
+%%   3. email/sms (if user opted in)
+%%   4. ws event for live UI badge
+    Ev["Domain event<br/>(reservation.confirmed,<br/>order.paid, etc.)"] --> Builder["Notification builder<br/>(template + locale)"]
+    Builder --> Doc[(notifications doc)]
+    Doc --> Feed["Customer feed<br/>GET /me/notifications"]
+    Doc --> StaffFeed["Staff feed (POS)"]
+
+    Builder -->|"channel=push"| Push["FCM / APNs / web-push"]
+    Builder -->|"channel=email"| Email["Email gateway"]
+    Builder -->|"channel=sms"| Sms["SMS gateway"]
+
+    Doc -. "ws notification.created<br/>+ user.notifications.unreadCountChanged" .-> Live[Live badge & toast]
+
+    Feed -->|"POST read / mark-all-read"| Doc
+    Feed -->|"DELETE"| Doc
+    Doc -. "ws notification.read / notification.deleted" .-> Live
+%% --- END: 22-notifications-fanout --------------------------------------------
+
+
+%% --- BEGIN: 23-realtime-channels ---------------------------------------------
+flowchart LR
+%% Canonical websocket channel names from common.yaml#RealtimeChannel,
+%% grouped by the entity they describe and the actor that subscribes.
+    subgraph EntityRes["reservations"]
+        rc["reservation.created<br/>reservation.updated<br/>reservation.cancelled<br/>reservation.invite.updated"]
+    end
+    subgraph EntityOrd["orders"]
+        oc["order.updated<br/>order.item.added<br/>order.item.updated<br/>order.item.voided<br/>order.bill.finalized<br/>order.paid<br/>order.batch.sent<br/>order.batch.accepted<br/>order.batch.completed"]
+    end
+    subgraph EntityTbl["tables"]
+        tc["table.created<br/>table.updated<br/>table.deleted"]
+    end
+    subgraph EntityPay["payments"]
+        pc["payment.captured<br/>payment.voided<br/>payment.refund.requested<br/>payment.refund.succeeded<br/>payment.refund.failed"]
+    end
+    subgraph EntityWal["wallets / rewards"]
+        wc["wallet.transaction.created<br/>user.wallets.updated<br/>points.ledger.created<br/>user.rewards.updated"]
+    end
+    subgraph EntityNotif["notifications / profile"]
+        nc["notification.created<br/>notification.read<br/>notification.deleted<br/>user.notifications.unreadCountChanged<br/>user.profile.updated<br/>user.friends.updated"]
+    end
+    subgraph EntitySub["subscriptions / support"]
+        sc["subscription.created · updated<br/>subscription.invoice.created · paid · failed<br/>support.conversation.created · updated<br/>support.message.created"]
+    end
+    subgraph EntityRest["restaurant"]
+        rsc["restaurant.profile.updated<br/>restaurant.menu.updated<br/>restaurant.settings.updated<br/>restaurant.staff.pending"]
+    end
+
+    Cust[Customer app]:::actor
+    Pos[POS app]:::actor
+
+    rc --> Cust
+    rc --> Pos
+    oc --> Pos
+    oc -. "(only if reservation.customerId matches)" .-> Cust
+    tc --> Pos
+    pc --> Pos
+    pc -. "customer-related events" .-> Cust
+    wc --> Cust
+    nc --> Cust
+    nc -. staff variants .-> Pos
+    sc --> Cust
+    sc --> Pos
+    rsc --> Pos
+    rsc -. "menu.updated only" .-> Cust
+
+    classDef actor fill:#fce8b2,stroke:#a87a00,color:#3a2a00
+%% --- END: 23-realtime-channels -----------------------------------------------
+
+
+%% --- BEGIN: 24-idempotency ---------------------------------------------------
+sequenceDiagram
+%% Replay-safe mutations: any unsafe POST/PUT/PATCH may include an
+%% Idempotency-Key. Keys are scoped to (userId, route, key) and live 24h.
+    autonumber
+    participant App
+    participant API
+    participant Cache as idempotency cache (24h)
+    participant DB
+
+    App->>API: POST /reservations<br/>Idempotency-Key: 8f2c-...
+    API->>Cache: lookup
+    alt miss
+        API->>DB: do the work · attach response
+        API->>Cache: store(key → response, body-hash)
+        API-->>App: 201 (no replay header)
+    else hit · same body
+        API-->>App: 201/200 + Idempotency-Replay: true
+    else hit · different body
+        API-->>App: 409 idempotency_key_conflict
+    end
+
+    Note over App,API: Clients SHOULD generate a fresh ULID per logical action,<br/>not per retry. Retries reuse the same key.
+%% --- END: 24-idempotency -----------------------------------------------------
+
+
+%% --- BEGIN: 25-error-retry-decision ------------------------------------------
+flowchart TD
+%% RFC 7807 Problem responses + a deterministic retry policy. Codes match
+%% common.yaml#ErrorCode.
+    R["HTTP response"] --> S{"status?"}
+    S -- "2xx" --> OK([done])
+    S -- "400 bad_request"        --> Fix["Fix payload — never retry"]
+    S -- "401 token_expired"      --> Refresh["Refresh token, then retry once"]
+    S -- "401 unauthenticated"    --> SignIn["Force sign-in"]
+    S -- "403"                    --> Fix
+    S -- "404"                    --> Fix
+    S -- "409 idempotency_key_conflict" --> NewKey["Generate new key, retry"]
+    S -- "409 invalid_transition / *_already_*" --> Inspect["Refresh resource, decide"]
+    S -- "410 invite_expired"     --> Inspect
+    S -- "422 validation_failed"  --> ShowErrors["Show field errors[]"]
+    S -- "423 *_attempts_exceeded" --> Lockout["Show lockout · cool-down"]
+    S -- "429 too_many_requests"  --> Backoff["Wait Retry-After<br/>then retry (max 3)"]
+    S -- "5xx"                    --> Backoff5["Exp backoff jitter<br/>idempotent ops only"]
+
+    classDef bad fill:#fee,stroke:#a00,color:#600
+    class Fix,SignIn,ShowErrors,Lockout bad
+%% --- END: 25-error-retry-decision --------------------------------------------
+
+
+%% --- BEGIN: 26-pagination ----------------------------------------------------
+flowchart LR
+%% Two pagination conventions live side by side. Cursor-based is preferred for
+%% high-cardinality logs (notifications, transactions, history); offset-based
+%% is fine for bounded admin lists (staff, deposit cards).
+    subgraph Offset["Offset · admin lists"]
+        O1["GET ...?page=1&pageSize=20"] --> O2["{ items, page, pageSize, total }"]
+        O2 -->|"page = page+1<br/>while items*page < total"| O1
+    end
+    subgraph Cursor["Cursor · ledgers + feeds"]
+        C1["GET ...?limit=50"] --> C2["{ items, nextCursor }"]
+        C2 -->|"if nextCursor != null<br/>?cursor=<opaque>"| C3["GET ...?limit=50&cursor=..."]
+        C3 --> C2
+    end
+%% --- END: 26-pagination ------------------------------------------------------
+
+
+%% --- BEGIN: 27-table-state ---------------------------------------------------
+stateDiagram-v2
+%% Table status reflects floor-plan reality; transitions are mostly POS-driven.
+    [*] --> available
+    available --> reserved : reservation.confirmed for<br/>upcoming slot
+    available --> occupied : POS opens order on table
+    reserved --> occupied  : QR check-in / POS check-in
+    reserved --> available : reservation cancelled / no_show
+    occupied --> needs_cleaning : order paid · party leaves
+    needs_cleaning --> available : POS marks clean
+    available --> out_of_service : manager flag
+    out_of_service --> available : manager unflag
+
+    note right of out_of_service
+      Cannot accept reservations or orders.
+    end note
+%% --- END: 27-table-state -----------------------------------------------------
+
+
+%% --- BEGIN: 28-friend-graph --------------------------------------------------
+stateDiagram-v2
+%% Friend edges are stored on customer_users.friends[]. State is per-edge.
+    [*] --> pending_outgoing : Alice sends a friend request to Bob
+    [*] --> pending_outgoing : phone invite (source=phone_invite)
+    pending_outgoing --> accepted : Bob accepts
+    pending_outgoing --> declined : Bob declines
+    pending_outgoing --> [*]      : Alice cancels
+
+    accepted --> blocked : either party blocks
+    blocked --> [*] : unblock (re-friend manually)
+    declined --> [*]
+    accepted --> [*] : DELETE /me/friends/(friendId)
+
+    note right of pending_outgoing
+      mirror edge on Bob.friends:
+        status = pending_incoming
+    end note
+%% --- END: 28-friend-graph ----------------------------------------------------
+
+
+%% --- BEGIN: 29-daily-bonus-referral ------------------------------------------
+sequenceDiagram
+%% Daily bonus = once-per-local-day, three-box reveal. Referral = once per
+%% redeemer, capped per code; both award via wallet + points ledgers.
+    autonumber
+    actor U as Customer
+    participant API
+    participant Cu as customer_users
+    participant LW as wallet_transactions
+    participant LP as points_ledger
+
+    U->>API: GET /me/daily-bonus
+    API-->>U: { available, lastClaimedDate, history[] }
+
+    alt already claimed today
+        API-->>U: 409 daily_bonus_already_claimed
+    else available
+        U->>API: POST /me/daily-bonus:claim (selectedBox 0/1/2, Idempotency-Key)
+        API->>API: roll reward (points or bonus_credit or coupon)
+        opt reward.kind is points
+            API->>LP: insert (reason=daily_bonus, direction=credit)
+        end
+        opt reward.kind is bonus_credit
+            API->>LW: insert (pool=bonus, type=daily_bonus)
+        end
+        API->>Cu: append dailyBonus.history and update lastClaimedDate
+        API-->>U: 200 with reward and balances
+        API-->>U: ws user.wallets.updated and user.rewards.updated
+    end
+
+    Note over U,API: Referral redemption mirrors this. POST /me/referral:redeem with code rewards both redeemer and referrer. Errors include referral_already_redeemed and referral_self_redeem.
+%% --- END: 29-daily-bonus-referral --------------------------------------------
+
+
+%% --- BEGIN: 30-permissions-matrix --------------------------------------------
+flowchart LR
+%% Staff role + permissions gate POS endpoints. The matrix is documented in
+%% pos/Settings/README.md and pos/Orders/README.md. Permissions are sent in
+%% the JWT and re-checked on every request.
+    subgraph Roles
+        Mgr["manager"]
+        Cs["cashier"]
+        Wt["waiter"]
+        Cf["chef"]
+    end
+
+    subgraph Perms["Common permission flags"]
+        P1["restaurant.settings"]
+        P2["staff.manage"]
+        P3["menu.edit"]
+        P4["floors.edit"]
+        P5["tables.edit"]
+        P6["orders.take"]
+        P7["payments.process"]
+        P8["payments.refund"]
+        P9["kitchen.act"]
+        P10["analytics.view"]
+        P11["reservations.approve"]
+    end
+
+    Mgr --> P1 & P2 & P3 & P4 & P5 & P6 & P7 & P8 & P10 & P11
+    Cs  --> P6 & P7
+    Wt  --> P6 & P11
+    Cf  --> P9
+
+    Perms -. "missing → 403 missing_permission" .-> Err[(error)]
+    Roles -. "wrong role → 403 missing_role" .-> Err
+    Note["TODO: verify exact permission strings — pos/Settings/README.md<br/>describes the dialog but the canonical enum is not exhaustively listed<br/>in the OpenAPI yet."]:::todo
+    classDef todo fill:#fff7c2,stroke:#a87a00,color:#3a2a00,stroke-dasharray: 4 2
+%% --- END: 30-permissions-matrix ----------------------------------------------
+
+
+%% =============================================================================
+%% End of catalog
+%% =============================================================================

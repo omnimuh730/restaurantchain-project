@@ -1,0 +1,34 @@
+flowchart LR
+%% Staff role + permissions gate POS endpoints. The matrix is documented in
+%% pos/Settings/README.md and pos/Orders/README.md. Permissions are sent in
+%% the JWT and re-checked on every request.
+    subgraph Roles
+        Mgr["manager"]
+        Cs["cashier"]
+        Wt["waiter"]
+        Cf["chef"]
+    end
+
+    subgraph Perms["Common permission flags"]
+        P1["restaurant.settings"]
+        P2["staff.manage"]
+        P3["menu.edit"]
+        P4["floors.edit"]
+        P5["tables.edit"]
+        P6["orders.take"]
+        P7["payments.process"]
+        P8["payments.refund"]
+        P9["kitchen.act"]
+        P10["analytics.view"]
+        P11["reservations.approve"]
+    end
+
+    Mgr --> P1 & P2 & P3 & P4 & P5 & P6 & P7 & P8 & P10 & P11
+    Cs  --> P6 & P7
+    Wt  --> P6 & P11
+    Cf  --> P9
+
+    Perms -. "missing → 403 missing_permission" .-> Err[(error)]
+    Roles -. "wrong role → 403 missing_role" .-> Err
+    Note["TODO: verify exact permission strings — pos/Settings/README.md<br/>describes the dialog but the canonical enum is not exhaustively listed<br/>in the OpenAPI yet."]:::todo
+    classDef todo fill:#fff7c2,stroke:#a87a00,color:#3a2a00,stroke-dasharray: 4 2
