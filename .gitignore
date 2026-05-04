@@ -1,0 +1,21 @@
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.cursor/
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+
+# Node dependencies for independent services
+bff/node_modules/
+pos/node_modules/
+restaurant/node_modules/
+
+# Lock files from generated docs/workflows dependencies can remain local
+project-docs/workflows/node_modules/
