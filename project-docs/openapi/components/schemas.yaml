@@ -47,9 +47,106 @@ components:
           oneOf:
             - $ref: '#/components/schemas/CustomerSubscriptionSummary'
             - { type: 'null' }
+        cards:
+          type: array
+          description: In-app stored-value cards (owned + linked); see `/me/cards`.
+          items: { $ref: '#/components/schemas/CustomerCard' }
         createdAt:          { type: string, format: date-time }
         updatedAt:          { type: string, format: date-time }
         deletedAt:          { type: [string, 'null'], format: date-time }
+
+    CustomerCard:
+      description: Owned or linked card row from `customer_users.cards[]` (API-safe projection).
+      oneOf:
+        - $ref: '#/components/schemas/OwnedCardResponse'
+        - $ref: '#/components/schemas/LinkedCardResponse'
+      discriminator:
+        propertyName: cardKind
+        mapping:
+          owned: '#/components/schemas/OwnedCardResponse'
+          linked: '#/components/schemas/LinkedCardResponse'
+
+    CardLinkPermissions:
+      type: object
+      required: [canSpend, canViewBalance, canViewTransactions]
+      properties:
+        canSpend: { type: boolean }
+        canViewBalance: { type: boolean }
+        canViewTransactions: { type: boolean }
+
+    OwnedCardResponse:
+      type: object
+      required: [id, cardKind, name, cardNumberLast4, balances, isFrozen, allowExternalLink, allowExternalUse, linkedUsers, createdAt, updatedAt]
+      properties:
+        id: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        cardKind: { type: string, enum: [owned] }
+        name: { type: string }
+        cardNumberLast4: { type: string, pattern: '^[0-9]{4}$' }
+        balances:
+          type: object
+          description: Currency code -> available/locked decimal strings.
+          additionalProperties:
+            type: object
+            required: [available, locked]
+            properties:
+              available: { type: string }
+              locked: { type: string }
+        isFrozen: { type: boolean }
+        allowExternalLink: { type: boolean }
+        allowExternalUse: { type: boolean }
+        linkedUsers:
+          type: array
+          items: { $ref: '#/components/schemas/CardLinkedUser' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CardLinkedUser:
+      type: object
+      required: [userId, status, permissions, linkedAt]
+      properties:
+        userId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        status: { type: string, enum: [pending_approval, active, revoked] }
+        permissions: { $ref: '#/components/schemas/CardLinkPermissions' }
+        limits:
+          type: object
+          additionalProperties:
+            type: object
+            required: [daily]
+            properties:
+              daily: { $ref: './common.yaml#/components/schemas/Money' }
+        linkedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+
+    LinkedCardResponse:
+      type: object
+      required: [id, cardKind, alias, ownerUserId, ownerCardId, status, permissions, linkedAt]
+      properties:
+        id: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        cardKind: { type: string, enum: [linked] }
+        alias: { type: string }
+        ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        ownerCardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        status: { type: string, enum: [pending_approval, active, revoked] }
+        permissions: { $ref: '#/components/schemas/CardLinkPermissions' }
+        linkedAt: { type: string, format: date-time }
+
+    CardTransaction:
+      type: object
+      required: [id, usedByUserId, ownerUserId, ownerCardId, cardKindSpentAs, amount, type, status, createdAt]
+      properties:
+        id: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        usedByUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        ownerCardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        cardKindSpentAs: { type: string, enum: [owned, linked] }
+        amount: { $ref: './common.yaml#/components/schemas/Money' }
+        type: { type: string, enum: [payment, transfer, adjustment] }
+        status: { type: string, enum: [pending, completed, failed, reversed] }
+        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        paymentId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        createdAt: { type: string, format: date-time }
 
     UserWallets:
       type: object
@@ -132,6 +229,17 @@ components:
         restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
         foodId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
         savedAt:      { type: string, format: date-time }
+
+    RecentSearch:
+      type: object
+      required: [kind, query, searchedAt]
+      properties:
+        kind: { type: string, enum: [restaurant, cuisine, location] }
+        query: { type: string }
+        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        cuisineCode: { type: string }
+        locationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        searchedAt: { type: string, format: date-time }
 
     Friend:
       type: object
@@ -240,7 +348,7 @@ components:
 
     Restaurant:
       type: object
-      required: [id, name, slug, cuisine, priceLevel, status, address, location, contact, rating, amenities, tier, createdAt]
+      required: [id, name, slug, cuisine, priceLevel, status, address, location, contact, reviewCount, averageRating, amenities, tier, createdAt]
       properties:
         id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
         name:         { type: string, example: Sakura Omakase }
@@ -263,12 +371,8 @@ components:
           properties:
             primaryPhone: { type: string }
             websiteUrl:   { type: string, format: uri-reference }
-        rating:
-          type: object
-          required: [average, count]
-          properties:
-            average: { type: number, minimum: 0, maximum: 5 }
-            count:   { type: integer, minimum: 0 }
+        reviewCount: { type: integer, minimum: 0, description: 'All reviews including comment-only.' }
+        averageRating: { $ref: '#/components/schemas/RestaurantAverageRating' }
         amenities:
           type: array
           items: { type: string }
@@ -296,6 +400,16 @@ components:
         createdAt:    { type: string, format: date-time }
         updatedAt:    { type: string, format: date-time }
         deletedAt:    { type: [string, 'null'], format: date-time }
+
+    RestaurantAverageRating:
+      type: object
+      description: Denormalized means from `reviews`; each field null when no submissions for that dimension.
+      properties:
+        overall:      { type: [number, 'null'], minimum: 0, maximum: 5 }
+        taste:        { type: [number, 'null'], minimum: 0, maximum: 5 }
+        ambience:     { type: [number, 'null'], minimum: 0, maximum: 5 }
+        service:      { type: [number, 'null'], minimum: 0, maximum: 5 }
+        valueOfPrice: { type: [number, 'null'], minimum: 0, maximum: 5 }
 
     Address:
       type: object
@@ -555,6 +669,10 @@ components:
         timeline:
           type: array
           items: { $ref: '#/components/schemas/ReservationTimelineEntry' }
+        reviewId:
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
         rating:
           oneOf:
             - $ref: '#/components/schemas/ReservationRating'
@@ -574,6 +692,59 @@ components:
         ambience:     { type: [number, 'null'], minimum: 0, maximum: 5 }
         service:      { type: [number, 'null'], minimum: 0, maximum: 5 }
         valueOfPrice: { type: [number, 'null'], minimum: 0, maximum: 5, description: 'Value-for-price score.' }
+
+    ReviewRatingPartial:
+      type: object
+      description: All dimensions optional; include only keys the customer set (1–5 stars).
+      properties:
+        overall:      { type: number, minimum: 1, maximum: 5 }
+        taste:        { type: number, minimum: 1, maximum: 5 }
+        ambience:     { type: number, minimum: 1, maximum: 5 }
+        service:      { type: number, minimum: 1, maximum: 5 }
+        valueOfPrice: { type: number, minimum: 1, maximum: 5 }
+
+    RestaurantReview:
+      type: object
+      required: [id, restaurantId, userId, createdAt, updatedAt]
+      properties:
+        id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
+        restaurantId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        userId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reservationId:
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - { type: 'null' }
+        comment:       { type: [string, 'null'] }
+        authorUsername:
+          type: string
+          description: Optional redacted handle for public list UI.
+        createdAt:     { type: string, format: date-time }
+        updatedAt:     { type: string, format: date-time }
+
+    UpsertReviewRequest:
+      type: object
+      required: [restaurantId]
+      properties:
+        restaurantId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - { type: 'null' }
+        comment: { type: string, maxLength: 2000 }
+
+    PatchReviewRequest:
+      type: object
+      properties:
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - { type: 'null' }
+        comment: { type: [string, 'null'], maxLength: 2000 }
 
     ReservationPreferences:
       type: object
@@ -1160,7 +1331,7 @@ components:
     RestaurantCard:
       description: Lightweight restaurant projection for grids and search results.
       type: object
-      required: [id, name, slug, cuisine, priceLevel, rating, address, location]
+      required: [id, name, slug, cuisine, priceLevel, reviewCount, averageRating, address, location]
       properties:
         id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
         name:         { type: string }
@@ -1168,11 +1339,8 @@ components:
         cuisine:      { type: array, items: { type: string } }
         priceLevel:   { type: integer, enum: [1, 2, 3, 4] }
         thumbnailUrl: { type: string, format: uri-reference }
-        rating:
-          type: object
-          properties:
-            average: { type: number }
-            count:   { type: integer }
+        reviewCount: { type: integer, minimum: 0 }
+        averageRating: { $ref: '#/components/schemas/RestaurantAverageRating' }
         address:      { $ref: '#/components/schemas/Address' }
         location:     { $ref: './common.yaml#/components/schemas/GeoPoint' }
         distanceMeters: { type: number, description: 'Filled when query has near=lat,lng.' }

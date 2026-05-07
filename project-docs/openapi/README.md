@@ -17,6 +17,8 @@ openapi/
     customer-profile.yaml       # /me, preferences, security answers, devices, payment methods
     customer-social.yaml        # saved items, recent searches, friends, daily bonus, referral
     customer-wallets.yaml       # wallets, top-up, gift, transactions
+    customer-credit-cards.yaml  # in-app cards (owned + linked) + card_transactions list
+    customer-reviews.yaml       # restaurant reviews + public list by restaurant
     customer-rewards.yaml       # rewards cache + points ledger
     customer-notifications.yaml # in-app feed, mark-read, delete
     customer-support.yaml       # support conversations and messages

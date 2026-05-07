@@ -16,7 +16,7 @@ Source READMEs:
 | `reservations` | A confirmed-or-pending booking. Single source of truth between the customer app and POS. |
 
 
-Related catalogs (`reservation_preferences`) live in `[metadata](./metadata.md)`. Table assignment and QR validation use the `tables` collection.
+Related catalogs (`reservation_preferences`) live in `[metadata](./metadata.md)`. Table assignment and QR validation use the `tables` collection. Post-visit public reviews are stored in `[reviews.md](./reviews.md)`; optional `reviewId` links a completed visit to that row.
 
 ---
 
@@ -103,13 +103,14 @@ type Reservation = {
     note?: string;
   }>;
 
-  // Post-visit fields
+  // Post-visit fields — canonical long-form review lives in `reviews` when that product path is enabled.
+  reviewId?: ObjectId | null;       // -> reviews._id
   rating?: {
-    overall?: number | null;        // 0..5
-    taste?: number | null;          // 0..5
-    ambience?: number | null;       // 0..5
-    service?: number | null;        // 0..5
-    valueOfPrice?: number | null;   // 0..5
+    overall?: number | null;        // 1..5 when set
+    taste?: number | null;
+    ambience?: number | null;
+    service?: number | null;
+    valueOfPrice?: number | null;
   } | null;
   ratingComment?: string | null;
   pointsEarned?: number;            // mirrored from points_ledger

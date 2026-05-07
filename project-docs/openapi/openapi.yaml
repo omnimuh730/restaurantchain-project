@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    13-collection MongoDB schema in `api-docs/page-driven/schema/`.
+    14-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -35,6 +35,10 @@ tags:
     description: Saved items, recent searches, friends, daily bonus, referral.
   - name: Customer · Wallets
     description: Wallet balances, top-ups, gifts, transactions.
+  - name: Customer · Credit cards
+    description: In-app stored-value cards (owned + linked access), distinct from wallets.
+  - name: Customer · Reviews
+    description: Restaurant reviews and discovery review feeds.
   - name: Customer · Rewards
     description: Reward tier, points, points ledger.
   - name: Customer · Notifications
@@ -44,7 +48,7 @@ tags:
   - name: Customer · Subscription
     description: CatchTable Pro subscription.
   - name: Discovery
-    description: Discover home, explorer search/map, public restaurant/menu/availability.
+    description: Discover home, explorer search/map, public restaurant/menu/availability/reviews.
   - name: Reservations
     description: Reservation lifecycle (customer-side and POS-side share most resources).
   # ------ POS-facing ------
@@ -120,6 +124,20 @@ paths:
   /me/wallets/top-ups/{topUpId}:cancel:    { post: { $ref: './paths/customer-wallets.yaml#/x-operations/CancelTopUp' } }
   /me/wallets/{pool}/gift:                 { post: { $ref: './paths/customer-wallets.yaml#/x-operations/SendGift' } }
 
+  # ============ Customer · Credit cards ============
+  /me/cards:                               { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ListMyCards' }, post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/CreateOwnedCard' } }
+  /me/cards/transactions:                  { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ListCardTransactions' } }
+  /me/cards:link-request:                  { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/RequestLinkByNumber' } }
+  /me/cards/{cardId}:                      { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/GetMyCard' }, patch: { $ref: './paths/customer-credit-cards.yaml#/x-operations/PatchOwnedCard' } }
+  /me/cards/{cardId}:freeze:               { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/FreezeCard' } }
+  /me/cards/{cardId}:unfreeze:             { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/UnfreezeCard' } }
+  /me/cards/{cardId}/linked-users/{userId}:approve: { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ApproveLinkedUser' } }
+  /me/cards/{cardId}/linked-users/{userId}:revoke:  { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/RevokeLinkedUser' } }
+
+  # ============ Customer · Reviews ============
+  /me/reviews:                             { get: { $ref: './paths/customer-reviews.yaml#/x-operations/ListMyReviews' }, post: { $ref: './paths/customer-reviews.yaml#/x-operations/UpsertReview' } }
+  /me/reviews/{reviewId}:                  { get: { $ref: './paths/customer-reviews.yaml#/x-operations/GetMyReview' }, patch: { $ref: './paths/customer-reviews.yaml#/x-operations/PatchReview' }, delete: { $ref: './paths/customer-reviews.yaml#/x-operations/DeleteReview' } }
+
   # ============ Customer · Rewards ============
   /me/rewards:                             { get: { $ref: './paths/customer-rewards.yaml#/x-operations/GetRewards' } }
   /me/rewards/points-ledger:               { get: { $ref: './paths/customer-rewards.yaml#/x-operations/ListPointsLedger' } }
@@ -151,6 +169,7 @@ paths:
   /restaurants/{restaurantId}:             { get: { $ref: './paths/discovery.yaml#/x-operations/GetPublicRestaurant' } }
   /restaurants/{restaurantId}/menu:        { get: { $ref: './paths/discovery.yaml#/x-operations/GetPublicMenu' } }
   /restaurants/{restaurantId}/availability: { get: { $ref: './paths/discovery.yaml#/x-operations/GetAvailability' } }
+  /restaurants/{restaurantId}/reviews:      { get: { $ref: './paths/customer-reviews.yaml#/x-operations/ListRestaurantReviews' } }
 
   # ============ Reservations ============
   /me/reservations:                                       { get: { $ref: './paths/reservations.yaml#/x-operations/ListMyReservations' } }

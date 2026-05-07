@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    13-collection MongoDB schema in `api-docs/page-driven/schema/`.
+    14-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -34,6 +34,10 @@ tags:
     description: Saved items, recent searches, friends, daily bonus, referral.
   - name: Customer · Wallets
     description: Wallet balances, top-ups, gifts, transactions.
+  - name: Customer · Credit cards
+    description: In-app stored-value cards (owned + linked access), distinct from wallets.
+  - name: Customer · Reviews
+    description: Restaurant reviews and discovery review feeds.
   - name: Customer · Rewards
     description: Reward tier, points, points ledger.
   - name: Customer · Notifications
@@ -43,7 +47,7 @@ tags:
   - name: Customer · Subscription
     description: CatchTable Pro subscription.
   - name: Discovery
-    description: Discover home, explorer search/map, public restaurant/menu/availability.
+    description: Discover home, explorer search/map, public restaurant/menu/availability/reviews.
   - name: Reservations
     description: Reservation lifecycle (customer-side and POS-side share most resources).
   - name: POS · Restaurant
@@ -971,25 +975,15 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 80
-                displayName:
-                  type:
-                    - string
-                    - 'null'
-                  maxLength: 80
-                email:
-                  type:
-                    - string
-                    - 'null'
-                  format: email
                 phone:
                   type:
                     - string
                     - 'null'
-                avatarUrl:
+                avatarImg:
                   type:
                     - string
                     - 'null'
-                  format: uri-reference
+                  description: Base64 image data URI (e.g. data:image/png;base64,...)
       responses:
         '200':
           description: Updated profile.
@@ -1000,7 +994,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '409':
-          description: Email or phone collision.
+          description: Phone collision.
           content:
             application/problem+json:
               schema:
@@ -1012,7 +1006,11 @@ paths:
       tags:
         - Customer · Profile
       operationId: putPreferences
+      deprecated: true
       summary: Replace preferences (theme, locale, location).
+      description: |
+        Deprecated. Preferences are stored locally on the client and this endpoint
+        is kept for backward compatibility only.
       requestBody:
         required: true
         content:
@@ -1052,8 +1050,10 @@ paths:
               schema:
                 type: object
                 properties:
-                  preferences:
-                    $ref: '#/components/schemas/preferences'
+                  storedLocally:
+                    type: boolean
+                    enum:
+                      - true
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '422':
@@ -1156,7 +1156,9 @@ paths:
       tags:
         - Customer · Profile
       operationId: listDevices
+      deprecated: true
       summary: List the customer's registered push devices.
+      description: Deprecated. Device registration is no longer required by the profile schema.
       responses:
         '200':
           description: Devices.
@@ -1175,8 +1177,11 @@ paths:
       tags:
         - Customer · Profile
       operationId: registerDevice
+      deprecated: true
       summary: Register or update a push token for the current device.
-      description: Idempotent on `(provider, token)`. Used to wire up FCM/APNs/web-push.
+      description: |
+        Deprecated. Device registration is no longer required by the profile schema.
+        Kept for backward compatibility.
       requestBody:
         required: true
         content:
@@ -1224,6 +1229,7 @@ paths:
       tags:
         - Customer · Profile
       operationId: deleteDevice
+      deprecated: true
       summary: Remove a push device. Idempotent.
       parameters:
         - $ref: '#/components/parameters/DeviceIdPath'
@@ -1498,7 +1504,6 @@ paths:
               - restaurant
               - cuisine
               - location
-              - freeform
               - all
             default: all
       responses:
@@ -1539,7 +1544,6 @@ paths:
                     - restaurant
                     - cuisine
                     - location
-                    - freeform
                 query:
                   type: string
                   minLength: 1
@@ -1732,10 +1736,10 @@ paths:
       tags:
         - Customer · Social
       operationId: inviteFriendByPhone
+      deprecated: true
       summary: Invite a friend by phone number (sends SMS deep link).
       description: |
-        Looks up the phone number; if a customer exists the invite becomes a friend request,
-        otherwise an SMS invite is recorded against the user with `source=phone_invite`.
+        Deprecated. Phone-based friend invites are no longer part of the social schema.
       requestBody:
         required: true
         content:
@@ -1926,32 +1930,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/redemptions-items'
                   reward:
-                    type: object
-                    properties:
-                      perRedemption:
-                        type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - points
-                              - wallet
-                          amount:
-                            type: number
-                          currency:
-                            type: string
-                      selfBonus:
-                        type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - points
-                              - wallet
-                          amount:
-                            type: number
-                          currency:
-                            type: string
+                    $ref: '#/components/schemas/Money'
         '401':
           $ref: '#/components/responses/Unauthenticated'
   /me/referral:redeem:
@@ -1990,17 +1969,7 @@ paths:
                   pointsLedgerId:
                     $ref: '#/components/schemas/ObjectId'
                   reward:
-                    type: object
-                    properties:
-                      kind:
-                        type: string
-                        enum:
-                          - points
-                          - wallet
-                      amount:
-                        type: number
-                      currency:
-                        type: string
+                    $ref: '#/components/schemas/Money'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
@@ -2377,6 +2346,446 @@ paths:
                     title: Currency mismatch
                     status: 422
                     code: currency_mismatch
+  /me/cards:
+    get:
+      tags:
+        - Customer · Credit cards
+      operationId: listMyCards
+      summary: List owned and linked cards for the Profile cards UI.
+      description: Never returns `passwordHash` or `cardNumberHash`; only last4 on owned cards.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerCard'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: createOwnedCard
+      summary: Issue a new owned card (name, passcode, optional initial top-up policy).
+      description: |
+        Server generates card number, stores `cardNumberHash` + `cardNumberLast4` + `passwordHash`.
+        Enforces max cards per user policy.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - passcode
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                passcode:
+                  type: string
+                  minLength: 4
+                  maxLength: 12
+                  description: Numeric PIN-style code; never stored raw.
+                allowExternalLink:
+                  type: boolean
+                  default: false
+                allowExternalUse:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Created owned card; returns display-safe fields and one-time full card number if product shows it once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - card
+                properties:
+                  card:
+                    $ref: '#/components/schemas/OwnedCardResponse'
+                  cardNumberFull:
+                    type: string
+                    description: Optional one-time plaintext number for owner to save; omitted in high-security mode.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /me/cards/transactions:
+    get:
+      tags:
+        - Customer · Credit cards
+      operationId: listCardTransactions
+      summary: History for cards the user owns or can view per permissions.
+      parameters:
+        - name: cardId
+          in: query
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: Filter to one card (owned id or linked id — server resolves to owner card).
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CardTransaction'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /me/cards:link-request:
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: requestLinkByNumber
+      summary: Start linked access by entering another user's card number + passcode.
+      description: |
+        Server resolves owner via `cardNumberHash`, verifies passcode, checks `allowExternalLink`
+        and not frozen. Creates `pending_approval` on owner's `linkedUsers` and on requester's
+        `cards[]` linked stub until the owner approves.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - cardNumber
+                - passcode
+              properties:
+                cardNumber:
+                  type: string
+                  description: Full card number as entered by user.
+                passcode:
+                  type: string
+                alias:
+                  type: string
+                  maxLength: 80
+                  description: Label on requester device (e.g. Mom's Card).
+      responses:
+        '202':
+          description: Link request pending owner approval.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - linkedCard
+                properties:
+                  linkedCard:
+                    $ref: '#/components/schemas/LinkedCardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/cards/{cardId}:
+    get:
+      tags:
+        - Customer · Credit cards
+      operationId: getMyCard
+      summary: Card detail (owned balances or linked reference + effective permissions).
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCard'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Customer · Credit cards
+      operationId: patchOwnedCard
+      summary: Update owned card metadata or external-link flags.
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                allowExternalLink:
+                  type: boolean
+                allowExternalUse:
+                  type: boolean
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedCardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/cards/{cardId}:freeze:
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: freezeCard
+      summary: Set `isFrozen` on an owned card (blocks all spend including linked users).
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedCardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/cards/{cardId}:unfreeze:
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: unfreezeCard
+      summary: Clear `isFrozen` on an owned card.
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedCardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/cards/{cardId}/linked-users/{userId}:approve:
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: approveLinkedUser
+      summary: Owner approves a pending linked user on an owned card.
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+        - $ref: '#/components/parameters/LinkedCustomerUserIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                permissions:
+                  $ref: '#/components/schemas/CardLinkPermissions'
+                limits:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    required:
+                      - daily
+                    properties:
+                      daily:
+                        $ref: '#/components/schemas/Money'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnedCardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/cards/{cardId}/linked-users/{userId}:revoke:
+    post:
+      tags:
+        - Customer · Credit cards
+      operationId: revokeLinkedUser
+      summary: Owner revokes linked access; requester's linked card becomes revoked.
+      parameters:
+        - $ref: '#/components/parameters/CardIdPath'
+        - $ref: '#/components/parameters/LinkedCustomerUserIdPath'
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/reviews:
+    get:
+      tags:
+        - Customer · Reviews
+      operationId: listMyReviews
+      summary: List reviews authored by the current customer.
+      parameters:
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Reviews.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RestaurantReview'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      tags:
+        - Customer · Reviews
+      operationId: upsertReview
+      summary: Create or update a review (same logic as reservation rate flow).
+      description: |
+        Inserts or updates a row in `reviews` and recomputes `restaurants.reviewCount` /
+        `restaurants.averageRating`.
+
+        Body must include at least one star in `rating` **or** a non-empty `comment`.
+        All dimensions inside `rating` are optional; omit keys the user did not set.
+
+        When `reservationId` is provided, the server enforces one review per
+        `(userId, reservationId)` and may mirror `reservations.reviewId` / legacy
+        `rating` fields for the Dining tab.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertReviewRequest'
+      responses:
+        '200':
+          description: Saved review and updated restaurant snapshot (optional).
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - review
+                properties:
+                  review:
+                    $ref: '#/components/schemas/RestaurantReview'
+                  restaurant:
+                    type: object
+                    description: Optional denormalized counters for client cache.
+                    properties:
+                      id:
+                        $ref: '#/components/schemas/ObjectId'
+                      reviewCount:
+                        type: integer
+                        minimum: 0
+                      averageRating:
+                        $ref: '#/components/schemas/RestaurantAverageRating'
+                  pointsAwarded:
+                    type: integer
+                    minimum: 0
+                    description: When policy grants `review_bonus` on points_ledger.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Reservation not eligible or duplicate policy violation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+  /me/reviews/{reviewId}:
+    get:
+      tags:
+        - Customer · Reviews
+      operationId: getMyReview
+      summary: Read one of the current customer's reviews.
+      parameters:
+        - $ref: '#/components/parameters/ReviewIdPath'
+      responses:
+        '200':
+          description: Review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantReview'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Customer · Reviews
+      operationId: patchReview
+      summary: Edit review text or stars within the allowed window.
+      parameters:
+        - $ref: '#/components/parameters/ReviewIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchReviewRequest'
+      responses:
+        '200':
+          description: Updated review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantReview'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags:
+        - Customer · Reviews
+      operationId: deleteReview
+      summary: Delete own review (and refresh restaurant aggregates).
+      parameters:
+        - $ref: '#/components/parameters/ReviewIdPath'
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /me/rewards:
     get:
       tags:
@@ -2497,8 +2906,7 @@ paths:
       operationId: deleteAllNotifications
       summary: Soft-delete every notification for the user.
       description: |
-        Sets `deletedAt` on all undeleted notifications. The user's `unreadNotifications`
-        cache is reset.
+        Sets `deletedAt` on all undeleted notifications.
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
@@ -3377,6 +3785,36 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+  /restaurants/{restaurantId}/reviews:
+    get:
+      tags:
+        - Discovery
+      operationId: listRestaurantReviews
+      summary: Public review feed for a restaurant (cursor pagination).
+      description: |
+        Reads from `reviews`. Works anonymously; optional `customerAuth` may hide blocked
+        content or personalize sort in the future.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantIdPath'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Reviews for the venue.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CursorPage'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RestaurantReview'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /me/reservations:
     get:
       tags:
@@ -3665,7 +4103,14 @@ paths:
       tags:
         - Reservations
       operationId: rateReservation
-      summary: Submit a post-visit rating + comment (Dining → past tab).
+      summary: Submit post-visit feedback (Dining → past tab).
+      description: |
+        Convenience wrapper aligned with `POST /me/reviews`: writes the `reviews` row for this
+        reservation's `restaurantId`, updates `restaurants.reviewCount` / `averageRating`, and
+        mirrors optional fields on `reservations` for backward compatibility.
+
+        Provide any subset of star dimensions and/or an optional comment. At least one of
+        (non-empty `comment` after trim) or (`rating` with at least one field) is required.
       parameters:
         - $ref: '#/components/parameters/ReservationIdPath'
       requestBody:
@@ -3674,19 +4119,17 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - rating
               properties:
                 rating:
-                  type: number
-                  minimum: 1
-                  maximum: 5
+                  oneOf:
+                    - $ref: '#/components/schemas/ReviewRatingPartial'
+                    - type: 'null'
                 comment:
                   type: string
                   maxLength: 2000
       responses:
         '200':
-          description: Rating saved. May credit `points_ledger` `review_bonus`.
+          description: Review saved. May credit `points_ledger` `review_bonus`.
           content:
             application/json:
               schema:
@@ -3694,6 +4137,8 @@ paths:
                 properties:
                   reservation:
                     $ref: '#/components/schemas/Reservation'
+                  review:
+                    $ref: '#/components/schemas/RestaurantReview'
                   pointsAwarded:
                     type: integer
                     minimum: 0
@@ -3703,6 +4148,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: Reservation not visited or already rated.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Empty payload (no stars and no meaningful comment).
           content:
             application/problem+json:
               schema:
@@ -3808,9 +4259,9 @@ paths:
       tags:
         - Reservations
       operationId: acceptReservationInvite
-      summary: Accept a reservation invite via shareLink.
+      summary: Accept a reservation invite via invite token.
       description: |
-        Token comes from the invite's `shareLink`. The invitee must be authenticated;
+        Token is obtained from the invite delivery channel. The invitee must be authenticated;
         if they are not yet a friend of the host they remain unchanged.
       parameters:
         - $ref: '#/components/parameters/InviteTokenPath'
@@ -3858,7 +4309,7 @@ paths:
       tags:
         - Reservations
       operationId: declineReservationInvite
-      summary: Decline a reservation invite via shareLink.
+      summary: Decline a reservation invite via invite token.
       parameters:
         - $ref: '#/components/parameters/InviteTokenPath'
       responses:
@@ -3883,7 +4334,7 @@ paths:
           * `rotationVersion` matches (rotated QR returns `qr_rotated`)
           * Current time within `validFrom`/`validUntil`
           * Reservation belongs to the same restaurant
-          * Reservation `scheduledFor` is within the restaurant's grace window
+          * Reservation `(date, time)` is within the restaurant's grace window
       parameters:
         - $ref: '#/components/parameters/ReservationIdPath'
       requestBody:
@@ -7672,6 +8123,25 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/ObjectId'
+    CardIdPath:
+      name: cardId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    LinkedCustomerUserIdPath:
+      name: userId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+      description: Target customer user id (e.g. linked card requester to approve or revoke).
+    ReviewIdPath:
+      name: reviewId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ObjectId'
     NotificationIdPath:
       name: notificationId
       in: path
@@ -7728,12 +8198,6 @@ components:
         maxLength: 128
     PhoneIdPath:
       name: phoneId
-      in: path
-      required: true
-      schema:
-        $ref: '#/components/schemas/ObjectId'
-    CardIdPath:
-      name: cardId
       in: path
       required: true
       schema:
@@ -7844,23 +8308,6 @@ components:
       type: string
       pattern: ^[0-9a-fA-F]{24}$
       example: 65f0000000000000000c0001
-    Money:
-      type: object
-      required:
-        - amount
-        - currency
-      properties:
-        amount:
-          type: string
-          description: Decimal string preserving `Decimal128` precision (e.g. "60000", "32.00").
-          pattern: ^-?[0-9]+(\.[0-9]+)?$
-          example: '60000'
-        currency:
-          type: string
-          description: ISO-4217 currency code. Common values KRW (zero minor units) and USD (two).
-          example: KRW
-          minLength: 3
-          maxLength: 8
     UserWallets:
       type: object
       required:
@@ -7872,44 +8319,38 @@ components:
           type: object
           required:
             - currency
-            - balance
+            - amount
           properties:
             currency:
               type: string
               example: KRW
-            balance:
-              $ref: '#/components/schemas/Money'
-            defaultPaymentMethodId:
-              $ref: '#/components/schemas/ObjectId'
+            amount:
+              type: string
+              description: Decimal amount as string (Decimal128).
         foreign:
           type: object
           required:
             - currency
-            - balance
+            - amount
           properties:
             currency:
               type: string
               example: USD
-            balance:
-              $ref: '#/components/schemas/Money'
-            defaultPaymentMethodId:
-              $ref: '#/components/schemas/ObjectId'
+            amount:
+              type: string
+              description: Decimal amount as string (Decimal128).
         bonus:
           type: object
           required:
             - currency
-            - balance
+            - amount
           properties:
             currency:
               type: string
               example: USD
-            balance:
-              $ref: '#/components/schemas/Money'
-            expiresAt:
-              type:
-                - string
-                - 'null'
-              format: date-time
+            amount:
+              type: string
+              description: Decimal amount as string (Decimal128).
     UserRewards:
       type: object
       required:
@@ -7997,47 +8438,11 @@ components:
         addedAt:
           type: string
           format: date-time
-    Device:
-      type: object
-      required:
-        - id
-        - provider
-        - token
-        - platform
-        - isActive
-        - lastSeenAt
-      properties:
-        id:
-          $ref: '#/components/schemas/ObjectId'
-        provider:
-          type: string
-          enum:
-            - fcm
-            - apns
-            - web_push
-        token:
-          type: string
-        platform:
-          type: string
-          enum:
-            - ios
-            - android
-            - web
-        appVersion:
-          type: string
-        deviceId:
-          type: string
-        isActive:
-          type: boolean
-        lastSeenAt:
-          type: string
-          format: date-time
     SavedItem:
       type: object
       required:
         - id
         - itemType
-        - display
         - savedAt
       properties:
         id:
@@ -8051,68 +8456,19 @@ components:
           $ref: '#/components/schemas/ObjectId'
         foodId:
           $ref: '#/components/schemas/ObjectId'
-        display:
-          type: object
-          required:
-            - name
-          properties:
-            name:
-              type: string
-            imageUrl:
-              type: string
-              format: uri-reference
-            cuisine:
-              type: string
-            rating:
-              type: number
-              minimum: 0
-              maximum: 5
         savedAt:
-          type: string
-          format: date-time
-    RecentSearch:
-      type: object
-      required:
-        - kind
-        - query
-        - lastUsedAt
-      properties:
-        kind:
-          type: string
-          enum:
-            - restaurant
-            - cuisine
-            - location
-            - freeform
-        query:
-          type: string
-        restaurantId:
-          $ref: '#/components/schemas/ObjectId'
-        cuisineCode:
-          type: string
-        locationId:
-          $ref: '#/components/schemas/ObjectId'
-        lastUsedAt:
           type: string
           format: date-time
     Friend:
       type: object
       required:
-        - id
+        - friendId
         - status
         - source
         - requestedAt
       properties:
-        id:
+        friendId:
           $ref: '#/components/schemas/ObjectId'
-        otherUserId:
-          $ref: '#/components/schemas/ObjectId'
-        otherUsername:
-          type: string
-        otherDisplayName:
-          type: string
-        phone:
-          type: string
         status:
           type: string
           enum:
@@ -8124,7 +8480,6 @@ components:
           type: string
           enum:
             - request
-            - phone_invite
             - import
         requestedAt:
           type: string
@@ -8132,6 +8487,23 @@ components:
         acceptedAt:
           type: string
           format: date-time
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: string
+          description: Decimal string preserving `Decimal128` precision (e.g. "60000", "32.00").
+          pattern: ^-?[0-9]+(\.[0-9]+)?$
+          example: '60000'
+        currency:
+          type: string
+          description: ISO-4217 currency code. Common values KRW (zero minor units) and USD (two).
+          example: KRW
+          minLength: 3
+          maxLength: 8
     Referral:
       type: object
       required:
@@ -8143,6 +8515,8 @@ components:
           example: SARAH-7Q3
         referredByCode:
           type: string
+        reward:
+          $ref: '#/components/schemas/Money'
         redemptions:
           type: array
           items:
@@ -8153,54 +8527,6 @@ components:
               redeemedAt:
                 type: string
                 format: date-time
-              reward:
-                type: object
-                properties:
-                  kind:
-                    type: string
-                    enum:
-                      - points
-                      - wallet
-                  amount:
-                    type: number
-                  currency:
-                    type: string
-    DailyBonusReward:
-      oneOf:
-        - type: object
-          required:
-            - kind
-            - points
-          properties:
-            kind:
-              type: string
-              enum:
-                - points
-            points:
-              type: integer
-              minimum: 1
-        - type: object
-          required:
-            - kind
-            - amount
-          properties:
-            kind:
-              type: string
-              enum:
-                - bonus_credit
-            amount:
-              $ref: '#/components/schemas/Money'
-        - type: object
-          required:
-            - kind
-            - couponCode
-          properties:
-            kind:
-              type: string
-              enum:
-                - coupon
-            couponCode:
-              type: string
     DailyBonus:
       type: object
       required:
@@ -8217,7 +8543,6 @@ components:
             required:
               - localDate
               - selectedBox
-              - reward
               - claimedAt
             properties:
               localDate:
@@ -8225,16 +8550,8 @@ components:
                 format: date
               selectedBox:
                 type: integer
-                enum:
-                  - 0
-                  - 1
-                  - 2
               reward:
-                $ref: '#/components/schemas/DailyBonusReward'
-              pointsLedgerId:
-                $ref: '#/components/schemas/ObjectId'
-              walletTransactionId:
-                $ref: '#/components/schemas/ObjectId'
+                $ref: '#/components/schemas/Money'
               claimedAt:
                 type: string
                 format: date-time
@@ -8268,6 +8585,152 @@ components:
           format: date-time
         cancelAtPeriodEnd:
           type: boolean
+    CardLinkPermissions:
+      type: object
+      required:
+        - canSpend
+        - canViewBalance
+        - canViewTransactions
+      properties:
+        canSpend:
+          type: boolean
+        canViewBalance:
+          type: boolean
+        canViewTransactions:
+          type: boolean
+    CardLinkedUser:
+      type: object
+      required:
+        - userId
+        - status
+        - permissions
+        - linkedAt
+      properties:
+        userId:
+          $ref: '#/components/schemas/ObjectId'
+        status:
+          type: string
+          enum:
+            - pending_approval
+            - active
+            - revoked
+        permissions:
+          $ref: '#/components/schemas/CardLinkPermissions'
+        limits:
+          type: object
+          additionalProperties:
+            type: object
+            required:
+              - daily
+            properties:
+              daily:
+                $ref: '#/components/schemas/Money'
+        linkedAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type: string
+          format: date-time
+    OwnedCardResponse:
+      type: object
+      required:
+        - id
+        - cardKind
+        - name
+        - cardNumberLast4
+        - balances
+        - isFrozen
+        - allowExternalLink
+        - allowExternalUse
+        - linkedUsers
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        cardKind:
+          type: string
+          enum:
+            - owned
+        name:
+          type: string
+        cardNumberLast4:
+          type: string
+          pattern: ^[0-9]{4}$
+        balances:
+          type: object
+          description: Currency code -> available/locked decimal strings.
+          additionalProperties:
+            type: object
+            required:
+              - available
+              - locked
+            properties:
+              available:
+                type: string
+              locked:
+                type: string
+        isFrozen:
+          type: boolean
+        allowExternalLink:
+          type: boolean
+        allowExternalUse:
+          type: boolean
+        linkedUsers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardLinkedUser'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LinkedCardResponse:
+      type: object
+      required:
+        - id
+        - cardKind
+        - alias
+        - ownerUserId
+        - ownerCardId
+        - status
+        - permissions
+        - linkedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        cardKind:
+          type: string
+          enum:
+            - linked
+        alias:
+          type: string
+        ownerUserId:
+          $ref: '#/components/schemas/ObjectId'
+        ownerCardId:
+          $ref: '#/components/schemas/ObjectId'
+        status:
+          type: string
+          enum:
+            - pending_approval
+            - active
+            - revoked
+        permissions:
+          $ref: '#/components/schemas/CardLinkPermissions'
+        linkedAt:
+          type: string
+          format: date-time
+    CustomerCard:
+      description: Owned or linked card row from `customer_users.cards[]` (API-safe projection).
+      oneOf:
+        - $ref: '#/components/schemas/OwnedCardResponse'
+        - $ref: '#/components/schemas/LinkedCardResponse'
+      discriminator:
+        propertyName: cardKind
+        mapping:
+          owned: '#/components/schemas/OwnedCardResponse'
+          linked: '#/components/schemas/LinkedCardResponse'
     CustomerUser:
       type: object
       required:
@@ -8275,12 +8738,10 @@ components:
         - username
         - fullName
         - status
-        - preferences
         - wallets
         - rewards
         - referral
         - dailyBonus
-        - unreadNotifications
         - createdAt
       properties:
         id:
@@ -8291,60 +8752,22 @@ components:
         fullName:
           type: string
           example: Sarah Kim
-        displayName:
-          type:
-            - string
-            - 'null'
-        email:
-          type:
-            - string
-            - 'null'
-          format: email
         phone:
           type:
             - string
             - 'null'
           example: '+8210123456789'
-        avatarUrl:
+        avatarImg:
           type:
             - string
             - 'null'
-          format: uri-reference
+          description: Base64 image data URI (e.g. data:image/png;base64,...)
         status:
           type: string
           enum:
             - active
             - deactivated
             - deleted
-        preferences:
-          type: object
-          required:
-            - theme
-          properties:
-            theme:
-              type: string
-              enum:
-                - airbnb
-                - ocean
-                - forest
-                - midnight
-            locale:
-              type:
-                - string
-                - 'null'
-            location:
-              type:
-                - object
-                - 'null'
-              properties:
-                areaId:
-                  $ref: '#/components/schemas/ObjectId'
-                lat:
-                  type: number
-                lng:
-                  type: number
-                label:
-                  type: string
         wallets:
           $ref: '#/components/schemas/UserWallets'
         rewards:
@@ -8353,18 +8776,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PaymentMethod'
-        devices:
-          type: array
-          items:
-            $ref: '#/components/schemas/Device'
         savedItems:
           type: array
           items:
             $ref: '#/components/schemas/SavedItem'
-        recentSearches:
-          type: array
-          items:
-            $ref: '#/components/schemas/RecentSearch'
         friends:
           type: array
           items:
@@ -8377,9 +8792,11 @@ components:
           oneOf:
             - $ref: '#/components/schemas/CustomerSubscriptionSummary'
             - type: 'null'
-        unreadNotifications:
-          type: integer
-          minimum: 0
+        cards:
+          type: array
+          description: In-app stored-value cards (owned + linked); see `/me/cards`.
+          items:
+            $ref: '#/components/schemas/CustomerCard'
         createdAt:
           type: string
           format: date-time
@@ -8633,10 +9050,6 @@ components:
             - active
             - inactive
             - rejected
-        devices:
-          type: array
-          items:
-            $ref: '#/components/schemas/Device'
         approvedBy:
           $ref: '#/components/schemas/ObjectId'
         approvedAt:
@@ -8720,35 +9133,41 @@ components:
         updatedAt:
           type: string
           format: date-time
-    preferences:
+    Device:
       type: object
       required:
-        - theme
+        - id
+        - provider
+        - token
+        - platform
+        - isActive
+        - lastSeenAt
       properties:
-        theme:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        provider:
           type: string
           enum:
-            - airbnb
-            - ocean
-            - forest
-            - midnight
-        locale:
-          type:
-            - string
-            - 'null'
-        location:
-          type:
-            - object
-            - 'null'
-          properties:
-            areaId:
-              $ref: '#/components/schemas/ObjectId'
-            lat:
-              type: number
-            lng:
-              type: number
-            label:
-              type: string
+            - fcm
+            - apns
+            - web_push
+        token:
+          type: string
+        platform:
+          type: string
+          enum:
+            - ios
+            - android
+            - web
+        appVersion:
+          type: string
+        deviceId:
+          type: string
+        isActive:
+          type: boolean
+        lastSeenAt:
+          type: string
+          format: date-time
     CursorPage:
       type: object
       required:
@@ -8759,12 +9178,35 @@ components:
             - string
             - 'null'
           description: Pass back as `?cursor=` to fetch the next page. `null` when at the end.
+    RecentSearch:
+      type: object
+      required:
+        - kind
+        - query
+        - searchedAt
+      properties:
+        kind:
+          type: string
+          enum:
+            - restaurant
+            - cuisine
+            - location
+        query:
+          type: string
+        restaurantId:
+          $ref: '#/components/schemas/ObjectId'
+        cuisineCode:
+          type: string
+        locationId:
+          $ref: '#/components/schemas/ObjectId'
+        searchedAt:
+          type: string
+          format: date-time
     items:
       type: object
       required:
         - localDate
         - selectedBox
-        - reward
         - claimedAt
       properties:
         localDate:
@@ -8772,19 +9214,47 @@ components:
           format: date
         selectedBox:
           type: integer
-          enum:
-            - 0
-            - 1
-            - 2
         reward:
-          $ref: '#/components/schemas/DailyBonusReward'
-        pointsLedgerId:
-          $ref: '#/components/schemas/ObjectId'
-        walletTransactionId:
-          $ref: '#/components/schemas/ObjectId'
+          $ref: '#/components/schemas/Money'
         claimedAt:
           type: string
           format: date-time
+    DailyBonusReward:
+      oneOf:
+        - type: object
+          required:
+            - kind
+            - points
+          properties:
+            kind:
+              type: string
+              enum:
+                - points
+            points:
+              type: integer
+              minimum: 1
+        - type: object
+          required:
+            - kind
+            - amount
+          properties:
+            kind:
+              type: string
+              enum:
+                - bonus_credit
+            amount:
+              $ref: '#/components/schemas/Money'
+        - type: object
+          required:
+            - kind
+            - couponCode
+          properties:
+            kind:
+              type: string
+              enum:
+                - coupon
+            couponCode:
+              type: string
     redemptions-items:
       type: object
       properties:
@@ -8793,18 +9263,6 @@ components:
         redeemedAt:
           type: string
           format: date-time
-        reward:
-          type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - points
-                - wallet
-            amount:
-              type: number
-            currency:
-              type: string
     WalletTransaction:
       type: object
       required:
@@ -8926,6 +9384,180 @@ components:
             - succeeded
             - failed
             - cancelled
+    CardTransaction:
+      type: object
+      required:
+        - id
+        - usedByUserId
+        - ownerUserId
+        - ownerCardId
+        - cardKindSpentAs
+        - amount
+        - type
+        - status
+        - createdAt
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        usedByUserId:
+          $ref: '#/components/schemas/ObjectId'
+        ownerUserId:
+          $ref: '#/components/schemas/ObjectId'
+        ownerCardId:
+          $ref: '#/components/schemas/ObjectId'
+        cardKindSpentAs:
+          type: string
+          enum:
+            - owned
+            - linked
+        amount:
+          $ref: '#/components/schemas/Money'
+        type:
+          type: string
+          enum:
+            - payment
+            - transfer
+            - adjustment
+        status:
+          type: string
+          enum:
+            - pending
+            - completed
+            - failed
+            - reversed
+        restaurantId:
+          $ref: '#/components/schemas/ObjectId'
+        reservationId:
+          $ref: '#/components/schemas/ObjectId'
+        orderId:
+          $ref: '#/components/schemas/ObjectId'
+        paymentId:
+          $ref: '#/components/schemas/ObjectId'
+        createdAt:
+          type: string
+          format: date-time
+    ReviewRatingPartial:
+      type: object
+      description: All dimensions optional; include only keys the customer set (1–5 stars).
+      properties:
+        overall:
+          type: number
+          minimum: 1
+          maximum: 5
+        taste:
+          type: number
+          minimum: 1
+          maximum: 5
+        ambience:
+          type: number
+          minimum: 1
+          maximum: 5
+        service:
+          type: number
+          minimum: 1
+          maximum: 5
+        valueOfPrice:
+          type: number
+          minimum: 1
+          maximum: 5
+    RestaurantReview:
+      type: object
+      required:
+        - id
+        - restaurantId
+        - userId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        restaurantId:
+          $ref: '#/components/schemas/ObjectId'
+        userId:
+          $ref: '#/components/schemas/ObjectId'
+        reservationId:
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - type: 'null'
+        comment:
+          type:
+            - string
+            - 'null'
+        authorUsername:
+          type: string
+          description: Optional redacted handle for public list UI.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UpsertReviewRequest:
+      type: object
+      required:
+        - restaurantId
+      properties:
+        restaurantId:
+          $ref: '#/components/schemas/ObjectId'
+        reservationId:
+          $ref: '#/components/schemas/ObjectId'
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - type: 'null'
+        comment:
+          type: string
+          maxLength: 2000
+    RestaurantAverageRating:
+      type: object
+      description: Denormalized means from `reviews`; each field null when no submissions for that dimension.
+      properties:
+        overall:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        taste:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        ambience:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        service:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        valueOfPrice:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+    PatchReviewRequest:
+      type: object
+      properties:
+        rating:
+          oneOf:
+            - $ref: '#/components/schemas/ReviewRatingPartial'
+            - type: 'null'
+        comment:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
     PointsLedgerEntry:
       type: object
       required:
@@ -9415,7 +10047,8 @@ components:
         - slug
         - cuisine
         - priceLevel
-        - rating
+        - reviewCount
+        - averageRating
         - address
         - location
       properties:
@@ -9439,13 +10072,11 @@ components:
         thumbnailUrl:
           type: string
           format: uri-reference
-        rating:
-          type: object
-          properties:
-            average:
-              type: number
-            count:
-              type: integer
+        reviewCount:
+          type: integer
+          minimum: 0
+        averageRating:
+          $ref: '#/components/schemas/RestaurantAverageRating'
         address:
           $ref: '#/components/schemas/Address'
         location:
@@ -9897,7 +10528,8 @@ components:
         - address
         - location
         - contact
-        - rating
+        - reviewCount
+        - averageRating
         - amenities
         - tier
         - createdAt
@@ -9954,19 +10586,12 @@ components:
             websiteUrl:
               type: string
               format: uri-reference
-        rating:
-          type: object
-          required:
-            - average
-            - count
-          properties:
-            average:
-              type: number
-              minimum: 0
-              maximum: 5
-            count:
-              type: integer
-              minimum: 0
+        reviewCount:
+          type: integer
+          minimum: 0
+          description: All reviews including comment-only.
+        averageRating:
+          $ref: '#/components/schemas/RestaurantAverageRating'
         amenities:
           type: array
           items:
@@ -10078,8 +10703,8 @@ components:
       type: object
       required:
         - id
+        - inviteeUserId
         - status
-        - shareLink
         - invitedAt
         - expiresAt
       properties:
@@ -10087,8 +10712,6 @@ components:
           $ref: '#/components/schemas/ObjectId'
         inviteeUserId:
           $ref: '#/components/schemas/ObjectId'
-        inviteePhone:
-          type: string
         status:
           type: string
           enum:
@@ -10096,9 +10719,6 @@ components:
             - accepted
             - declined
             - expired
-        shareLink:
-          type: string
-          format: uri-reference
         invitedAt:
           type: string
           format: date-time
@@ -10144,6 +10764,40 @@ components:
               $ref: '#/components/schemas/ObjectId'
         note:
           type: string
+    ReservationRating:
+      type: object
+      properties:
+        overall:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        taste:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        ambience:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        service:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+        valueOfPrice:
+          type:
+            - number
+            - 'null'
+          minimum: 0
+          maximum: 5
+          description: Value-for-price score.
     Reservation:
       type: object
       required:
@@ -10151,17 +10805,13 @@ components:
         - restaurantId
         - userId
         - confirmationCode
-        - source
         - partySize
         - date
         - time
-        - scheduledFor
         - contact
         - occasion
         - preferences
         - deposit
-        - serviceFee
-        - total
         - status
         - invites
         - timeline
@@ -10176,14 +10826,6 @@ components:
         confirmationCode:
           type: string
           example: CT-2026-0425A
-        source:
-          type: string
-          enum:
-            - explorer_map
-            - discover
-            - dining_book_again
-            - restaurant_pos
-            - other
         partySize:
           type: integer
           minimum: 1
@@ -10195,9 +10837,6 @@ components:
           type: string
           pattern: ^[0-2][0-9]:[0-5][0-9]$
           example: '11:00'
-        scheduledFor:
-          type: string
-          format: date-time
         seating:
           type:
             - string
@@ -10226,10 +10865,6 @@ components:
         preferences:
           $ref: '#/components/schemas/ReservationPreferences'
         deposit:
-          $ref: '#/components/schemas/Money'
-        serviceFee:
-          $ref: '#/components/schemas/Money'
-        total:
           $ref: '#/components/schemas/Money'
         paymentId:
           $ref: '#/components/schemas/ObjectId'
@@ -10260,12 +10895,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReservationTimelineEntry'
+        reviewId:
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
         rating:
-          type:
-            - number
-            - 'null'
-          minimum: 0
-          maximum: 5
+          oneOf:
+            - $ref: '#/components/schemas/ReservationRating'
+            - type: 'null'
         ratingComment:
           type:
             - string

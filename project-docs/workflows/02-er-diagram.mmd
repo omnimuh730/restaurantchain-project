@@ -1,5 +1,5 @@
 erDiagram
-%% The 13-collection compromise schema. Lines marked with `||--o{` mean
+%% The 14-collection compromise schema. Lines marked with `||--o{` mean
 %% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
 %% Cache fields living on `customer_users` (wallets, rewards, notifUnread) are
 %% kept in sync atomically with the authoritative ledger collections.
@@ -10,8 +10,11 @@ erDiagram
     customer_users ||--o{ subscriptions : "may have Pro"
     customer_users ||--o{ notifications : "receives"
     customer_users ||--o{ support_conversations : "opens"
+    customer_users ||--o{ reviews : "writes"
+    customer_users ||--o{ card_transactions : "card spend"
 
     restaurants ||--o{ reservations : "hosts"
+    restaurants ||--o{ reviews : "summarized by"
     restaurants ||--o{ orders : "operates"
     restaurants ||--o{ payments : "captures"
     restaurants ||--o{ subscriptions : "may have tier"
@@ -19,6 +22,7 @@ erDiagram
 
     reservations ||--o| orders : "may open one"
     reservations ||--o{ payments : "deposits + bills"
+    reservations ||--o| reviews : "may reference"
 
     orders ||--o{ payments : "settles"
 

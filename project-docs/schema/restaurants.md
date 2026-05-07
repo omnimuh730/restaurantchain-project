@@ -55,13 +55,18 @@ type Restaurant = {
   primaryPhone?: string;
   secondaryPhone?: string;
 
-  rating: {
-    reviewCount: number;
-    overall: Decimal128;
-    taste: Decimal128;
-    ambience: Decimal128;
-    service: Decimal128;
-    valueOfPrice: Decimal128;
+  /**
+   * Denormalized from the `reviews` collection. Recomputed on review write.
+   * `reviewCount` includes comment-only reviews (no stars).
+   * `averageRating` fields are means over reviews that submitted that dimension; omit or null when no data.
+   */
+  reviewCount: number;
+  averageRating: {
+    overall?: Decimal128 | null;
+    taste?: Decimal128 | null;
+    ambience?: Decimal128 | null;
+    service?: Decimal128 | null;
+    valueOfPrice?: Decimal128 | null;
   };
 
   amenities: string[];              // amenity codes (catalog: metadata.amenities)
@@ -174,7 +179,8 @@ type Restaurant = {
 ### Indexes
 
 - `{ status: 1, "subscription.tier": 1 }`
-- `{ "rating.overall": -1 }`
+- `{ "averageRating.overall": -1 }` (sparse, for sort-by-rating in discovery)
+- `{ reviewCount: -1 }` — optional for popularity sorts
 - `{ cuisine: 1 }`
 - `{ amenities: 1 }`
 - `{ location: "2dsphere" }` for Explorer map queries
@@ -204,6 +210,7 @@ Tables carry runtime status (`available | reserved | occupied | needs_cleaning |
 
 ## Cross-document rules
 
+- `reviewCount` / `averageRating` are maintained from `[reviews.md](./reviews.md)`; do not treat them as user-editable.
 - `restaurants.amenities[]` contains amenity codes from the `metadata` catalog.
 - The default `depositCards[i].isDefault === true` is the card customer payments settle into.
 - Floor edits replace the floor's contents transactionally; tables not in the request are soft-deleted in the `tables` collection.
@@ -214,6 +221,7 @@ Tables carry runtime status (`available | reserved | occupied | needs_cleaning |
 ## Realtime channels
 
 - `restaurant.profile.updated`
+- `restaurant.reviews.updated`
 - `restaurant.menu.updated`
 - `restaurant.settings.updated`
 - `restaurant.staff.pending` (when a new sign-up appears)

@@ -26,6 +26,26 @@
         "amount": { "$numberDecimal": "12.00" }
       }
     },
+    "cards": [
+      {
+        "_id": { "$oid": "65f0000000000000000c2101" },
+        "cardKind": "owned",
+        "name": "Family Dining Card",
+        "cardNumberHash": "sha256:pepper:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "cardNumberLast4": "8812",
+        "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$ZXhhbXBsZXNhbHQ$placeholder",
+        "balances": {
+          "KRW": { "available": { "$numberDecimal": "500000" }, "locked": { "$numberDecimal": "0" } },
+          "USD": { "available": { "$numberDecimal": "0" }, "locked": { "$numberDecimal": "0" } }
+        },
+        "isFrozen": false,
+        "allowExternalLink": true,
+        "allowExternalUse": true,
+        "linkedUsers": [],
+        "createdAt": { "$date": "2026-03-01T12:00:00.000Z" },
+        "updatedAt": { "$date": "2026-03-01T12:00:00.000Z" }
+      }
+    ],
     "rewards": {
       "tier": "gold",
       "points": 320,

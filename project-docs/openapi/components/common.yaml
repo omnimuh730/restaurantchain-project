@@ -153,6 +153,17 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/ObjectId' }
+    ReviewIdPath:
+      name: reviewId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+    LinkedCustomerUserIdPath:
+      name: userId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ObjectId' }
+      description: Target customer user id (e.g. linked card requester to approve or revoke).
     InviteTokenPath:
       name: inviteToken
       in: path

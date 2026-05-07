@@ -25,6 +25,8 @@ The same IDs are used across files so the documents cross-reference into a coher
 | `notifications_example.json`         | `notifications`         |
 | `support_conversations_example.json` | `support_conversations` |
 | `metadata_example.json`              | `metadata`              |
+| `reviews_example.json`               | `reviews`               |
+| `card_transactions_example.json`    | `card_transactions`   |
 
 
 ## Shared IDs
@@ -47,6 +49,9 @@ The same IDs are used across files so the documents cross-reference into a coher
 | Points ledger entry  | `65f0000000000000000a3001` |
 | Notification         | `65f0000000000000000a4001` |
 | Support conv         | `65f0000000000000000a6001` |
+| Review (Sarah→Sakura)| `65f0000000000000000c9001` |
+| Sarah family card    | `65f0000000000000000c2101` |
+| Card payment tx      | `65f0000000000000000c8001` |
 
 
 ## Loading

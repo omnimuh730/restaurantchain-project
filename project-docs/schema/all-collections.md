@@ -1,13 +1,13 @@
-# All Collections (12)
+# All Collections (14)
 
 Single-file reference for every MongoDB collection in the system. For per-domain context, sample documents, and state diagrams, see the individual files in this directory.
 
 
 | #   | Collection              | Purpose                                                                                                                                              | Detail                                   |
 | --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | `customer_users`        | End users of the reservation app; embeds wallet amounts cache, rewards cache, social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
+| 1   | `customer_users`        | End users of the reservation app; embeds wallet cache, **credit-style `cards[]`**, rewards cache, social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
 | 2   | `staff_users`           | POS users tied to a single restaurant.                                                                                                               | `[users.md](./users.md)`                 |
-| 3   | `restaurants`           | Tenant root; embeds settings, floors, simplified menu, deposit cards, pending-staff inbox.                                                             | `[restaurants.md](./restaurants.md)`     |
+| 3   | `restaurants`           | Tenant root; embeds settings, floors, simplified menu, deposit cards, pending-staff inbox; **`reviewCount` + `averageRating` denormalized from reviews.** | `[restaurants.md](./restaurants.md)`     |
 | 4   | `tables`                | Per-floor operational state with QR; separate from `restaurants` to avoid contention.                                                                | `[tables.md](./tables.md)`               |
 | 5   | `reservations`          | Customer ↔ restaurant bridge; embeds invites and timeline.                                                                                           | `[reservations.md](./reservations.md)`   |
 | 6   | `orders`                | POS order; embeds items with chef batches via `sendBatchId`.                                                                                         | `[orders.md](./orders.md)`               |
@@ -17,6 +17,8 @@ Single-file reference for every MongoDB collection in the system. For per-domain
 | 10  | `notifications`         | One row per delivered in-app notification (customer or staff).                                                                                       | `[notifications.md](./notifications.md)` |
 | 11  | `support_conversations` | Support thread; embeds messages.                                                                                                                     | `[support.md](./support.md)`             |
 | 12  | `metadata`              | One doc per static catalog (security questions, plans, tiers, amenities, articles, ...).                                                             | `[metadata.md](./metadata.md)`           |
+| 13  | `reviews`               | Customer-authored restaurant reviews; optional stars per dimension + optional comment; optional `reservationId`.                                       | `[reviews.md](./reviews.md)`             |
+| 14  | `card_transactions`     | Append-only ledger for in-app **card** spend (owned or linked); balances stay on owned cards only.                                                   | `[credit-cards.md](./credit-cards.md)`   |
 
 
 Auxiliary auth-infra (TTL'd, not part of the 12): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
@@ -57,6 +59,9 @@ type CustomerUser = {
     foreign:  { currency: "USD" | string; amount: Decimal128 };
     bonus:    { currency: string;          amount: Decimal128 };
   };
+
+  /** @see credit-cards.md — owned + linked stored-value cards (not PSP methods). */
+  cards: Array<OwnedCard | LinkedCard>;
 
   rewards: {
     tier: "silver" | "gold" | "platinum" | "diamond";
@@ -175,13 +180,13 @@ type Restaurant = {
   location: { type: "Point"; coordinates: [number, number] };
   primaryPhone?: string;
   secondaryPhone?: string;
-  rating: {
-    reviewCount: number;
-    overall: Decimal128;
-    taste: Decimal128;
-    ambience: Decimal128;
-    service: Decimal128;
-    valueOfPrice: Decimal128;
+  reviewCount: number;
+  averageRating: {
+    overall?: Decimal128 | null;
+    taste?: Decimal128 | null;
+    ambience?: Decimal128 | null;
+    service?: Decimal128 | null;
+    valueOfPrice?: Decimal128 | null;
   };
   amenities: string[];
   flags: { isNew?: boolean };
@@ -233,7 +238,7 @@ type Restaurant = {
 };
 ```
 
-Indexes: `{status:1, "subscription.tier":1}`, `{"rating.overall":-1}`, `{cuisine:1}`, `{amenities:1}`, `{location:"2dsphere"}`, text(`name, description`), `{"menu.items._id":1}`mk, `{"menu.items.categoryId":1}`mk.
+Indexes: `{status:1, "subscription.tier":1}`, `{"averageRating.overall":-1}`, `{reviewCount:-1}`, `{cuisine:1}`, `{amenities:1}`, `{location:"2dsphere"}`, text(`name, description`), `{"menu.items._id":1}`mk, `{"menu.items.categoryId":1}`mk.
 
 ---
 
@@ -304,6 +309,8 @@ type Reservation = {
     actor?: { kind: "customer" | "staff" | "system"; id?: ObjectId };
     note?: string;
   }>;
+  /** Optional pointer to canonical row in `reviews` (preferred over duplicating body here). */
+  reviewId?: ObjectId | null;
   rating?: {
     overall?: number | null;
     taste?: number | null;
@@ -574,6 +581,57 @@ Documents stored in this collection (one per `_id`):
 - `feature_flags`          — runtime toggles
 
 Default `_id` index is sufficient.
+
+---
+
+## 13) `reviews`
+
+```ts
+type ReviewRating = {
+  overall?: number;
+  ambience?: number;
+  taste?: number;
+  service?: number;
+  valueOfPrice?: number;
+};
+
+type Review = {
+  _id: ObjectId;
+  userId: ObjectId;
+  restaurantId: ObjectId;
+  reservationId?: ObjectId | null;
+  rating?: ReviewRating | null;
+  comment?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+```
+
+Indexes: `{restaurantId:1, createdAt:-1}`, `{userId:1, createdAt:-1}`, `{userId:1, reservationId:1}` unique sparse.
+
+---
+
+## 14) `card_transactions`
+
+```ts
+type CardTransaction = {
+  _id: ObjectId;
+  usedByUserId: ObjectId;
+  ownerUserId: ObjectId;
+  ownerCardId: ObjectId;
+  cardKindSpentAs: "owned" | "linked";
+  amount: { amount: Decimal128; currency: string };
+  type: "payment" | "transfer" | "adjustment" | string;
+  status: "pending" | "completed" | "failed" | "reversed";
+  restaurantId?: ObjectId;
+  reservationId?: ObjectId;
+  orderId?: ObjectId;
+  paymentId?: ObjectId;
+  createdAt: Date;
+};
+```
+
+Indexes: `{usedByUserId:1, createdAt:-1}`, `{ownerUserId:1, ownerCardId:1, createdAt:-1}`, `{restaurantId:1, createdAt:-1}` sparse, `{reservationId:1}` sparse.
 
 ---
 

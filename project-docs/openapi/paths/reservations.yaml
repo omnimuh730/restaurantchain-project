@@ -279,7 +279,14 @@ x-operations:
   RateReservation:
     tags: [Reservations]
     operationId: rateReservation
-    summary: Submit post-visit category ratings + comment (Dining → past tab).
+    summary: Submit post-visit feedback (Dining → past tab).
+    description: |
+      Convenience wrapper aligned with `POST /me/reviews`: writes the `reviews` row for this
+      reservation's `restaurantId`, updates `restaurants.reviewCount` / `averageRating`, and
+      mirrors optional fields on `reservations` for backward compatibility.
+
+      Provide any subset of star dimensions and/or an optional comment. At least one of
+      (non-empty `comment` after trim) or (`rating` with at least one field) is required.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/ReservationIdPath'
     requestBody:
@@ -288,32 +295,32 @@ x-operations:
         application/json:
           schema:
             type: object
-            required: [rating]
             properties:
               rating:
-                type: object
-                required: [overall, taste, ambience, service, valueOfPrice]
-                properties:
-                  overall:      { type: number, minimum: 1, maximum: 5 }
-                  taste:        { type: number, minimum: 1, maximum: 5 }
-                  ambience:     { type: number, minimum: 1, maximum: 5 }
-                  service:      { type: number, minimum: 1, maximum: 5 }
-                  valueOfPrice: { type: number, minimum: 1, maximum: 5 }
+                oneOf:
+                  - $ref: '../components/schemas.yaml#/components/schemas/ReviewRatingPartial'
+                  - { type: 'null' }
               comment: { type: string, maxLength: 2000 }
     responses:
       '200':
-        description: Rating saved. May credit `points_ledger` `review_bonus`.
+        description: Review saved. May credit `points_ledger` `review_bonus`.
         content:
           application/json:
             schema:
               type: object
               properties:
                 reservation:    { $ref: '../components/schemas.yaml#/components/schemas/Reservation' }
+                review:         { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
                 pointsAwarded:  { type: integer, minimum: 0 }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
       '409':
         description: Reservation not visited or already rated.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422':
+        description: Empty payload (no stars and no meaningful comment).
         content:
           application/problem+json:
             schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }

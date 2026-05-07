@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: 'CatchTable Page-Driven — Customer Reviews'
+  version: 1.0.0
+  description: |
+    Standalone OpenAPI 3.1 document for restaurant reviews (`reviews` collection).
+    See root `openapi.yaml` for full composition.
+paths:
+  /me/reviews:
+    get: { $ref: '#/x-operations/ListMyReviews' }
+    post: { $ref: '#/x-operations/UpsertReview' }
+  /me/reviews/{reviewId}:
+    get: { $ref: '#/x-operations/GetMyReview' }
+    patch: { $ref: '#/x-operations/PatchReview' }
+    delete: { $ref: '#/x-operations/DeleteReview' }
+  /restaurants/{restaurantId}/reviews:
+    get: { $ref: '#/x-operations/ListRestaurantReviews' }
+
+x-operations:
+  ListRestaurantReviews:
+    tags: [Discovery]
+    operationId: listRestaurantReviews
+    summary: Public review feed for a restaurant (cursor pagination).
+    description: |
+      Reads from `reviews`. Works anonymously; optional `customerAuth` may hide blocked
+      content or personalize sort in the future.
+    security: []
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Reviews for the venue.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  ListMyReviews:
+    tags: [Customer · Reviews]
+    operationId: listMyReviews
+    summary: List reviews authored by the current customer.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
+      - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Reviews.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../components/common.yaml#/components/schemas/CursorPage'
+                - type: object
+                  properties:
+                    data:
+                      type: array
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+
+  UpsertReview:
+    tags: [Customer · Reviews]
+    operationId: upsertReview
+    summary: Create or update a review (same logic as reservation rate flow).
+    description: |
+      Inserts or updates a row in `reviews` and recomputes `restaurants.reviewCount` /
+      `restaurants.averageRating`.
+
+      Body must include at least one star in `rating` **or** a non-empty `comment`.
+      All dimensions inside `rating` are optional; omit keys the user did not set.
+
+      When `reservationId` is provided, the server enforces one review per
+      `(userId, reservationId)` and may mirror `reservations.reviewId` / legacy
+      `rating` fields for the Dining tab.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '../components/schemas.yaml#/components/schemas/UpsertReviewRequest' }
+    responses:
+      '200':
+        description: Saved review and updated restaurant snapshot (optional).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [review]
+              properties:
+                review: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
+                restaurant:
+                  type: object
+                  description: Optional denormalized counters for client cache.
+                  properties:
+                    id: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                    reviewCount: { type: integer, minimum: 0 }
+                    averageRating: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantAverageRating' }
+                pointsAwarded: { type: integer, minimum: 0, description: 'When policy grants `review_bonus` on points_ledger.' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409':
+        description: Reservation not eligible or duplicate policy violation.
+        content:
+          application/problem+json:
+            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
+      '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
+
+  GetMyReview:
+    tags: [Customer · Reviews]
+    operationId: getMyReview
+    summary: Read one of the current customer's reviews.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReviewIdPath'
+    responses:
+      '200':
+        description: Review.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+
+  PatchReview:
+    tags: [Customer · Reviews]
+    operationId: patchReview
+    summary: Edit review text or stars within the allowed window.
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReviewIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '../components/schemas.yaml#/components/schemas/PatchReviewRequest' }
+    responses:
+      '200':
+        description: Updated review.
+        content:
+          application/json:
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantReview' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
+      '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
+
+  DeleteReview:
+    tags: [Customer · Reviews]
+    operationId: deleteReview
+    summary: Delete own review (and refresh restaurant aggregates).
+    parameters:
+      - $ref: '../components/common.yaml#/components/parameters/ReviewIdPath'
+    responses:
+      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
+      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
+      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }

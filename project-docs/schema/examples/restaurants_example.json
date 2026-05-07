@@ -21,8 +21,8 @@
     "location": { "type": "Point", "coordinates": [127.0473, 37.5172] },
     "primaryPhone": "+8225551234",
     "secondaryPhone": "+8225551236",
-    "rating": {
-      "reviewCount": 412,
+    "reviewCount": 412,
+    "averageRating": {
       "overall": { "$numberDecimal": "4.80" },
       "taste": { "$numberDecimal": "4.90" },
       "ambience": { "$numberDecimal": "4.70" },
