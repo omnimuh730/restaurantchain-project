@@ -26,6 +26,7 @@ The same IDs are used across files so the documents cross-reference into a coher
 | `support_conversations_example.json` | `support_conversations` |
 | `metadata_example.json`              | `metadata`              |
 | `reviews_example.json`               | `reviews`               |
+| `cards_example.json`                 | `cards`                 |
 | `card_transactions_example.json`    | `card_transactions`   |
 
 

@@ -3,6 +3,7 @@
     "_id": { "$oid": "65f0000000000000000c9001" },
     "userId": { "$oid": "65f0000000000000000c0001" },
     "restaurantId": { "$oid": "65f0000000000000000b0001" },
+    "parentId": null,
     "reservationId": { "$oid": "65f0000000000000000e0002" },
     "rating": {
       "overall": 5,

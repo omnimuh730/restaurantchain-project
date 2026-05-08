@@ -3,7 +3,7 @@
     "_id": { "$oid": "65f0000000000000000c8001" },
     "usedByUserId": { "$oid": "65f0000000000000000c0001" },
     "ownerUserId": { "$oid": "65f0000000000000000c0001" },
-    "ownerCardId": { "$oid": "65f0000000000000000c2101" },
+    "cardId": { "$oid": "65f0000000000000000c2101" },
     "cardKindSpentAs": "owned",
     "amount": { "amount": { "$numberDecimal": "45000" }, "currency": "KRW" },
     "type": "payment",

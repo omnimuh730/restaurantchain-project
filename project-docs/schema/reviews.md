@@ -13,7 +13,7 @@ Source READMEs:
 
 | Collection | Purpose |
 | ---------- | ------- |
-| `reviews`  | One row per customer review of a restaurant; optional tie to `reservations._id`. |
+| `reviews`  | One row per customer review (or **reply** in a sub-thread); optional `parentId` (default top-level); optional tie to `reservations._id`. |
 
 ---
 
@@ -38,6 +38,12 @@ type Review = {
   reservationId?: ObjectId | null; // -> reservations
 
   /**
+   * Top-level review: `null` (default). Reply / sub-thread: `reviews._id` of the parent review.
+   * Parent must exist, same `restaurantId`, and the product may cap nesting depth (e.g. only one level).
+   */
+  parentId?: ObjectId | null;
+
+  /**
    * Optional structured stars. Every field inside `rating` is optional.
    * A review may omit `rating` entirely (comment-only) or include only some dimensions.
    */
@@ -55,11 +61,14 @@ type Review = {
 
 - A write must carry **at least one** of: a non-empty `comment` (after trim), or a `rating` object with **at least one** numeric field set. Pure empty reviews are rejected (the user simply skips the flow).
 - Star values, when present, are integers **1–5** (or half-star if the product allows; default docs assume integer stars).
-- When `reservationId` is set, the server checks: reservation `userId` matches author, reservation `restaurantId` matches, and status is appropriate for review (e.g. `visited`). **At most one** review per `(userId, reservationId)` — upsert on repeat submit.
+- When `reservationId` is set, the server checks: reservation `userId` matches author, reservation `restaurantId` matches, and status is appropriate for review (e.g. `visited`). **At most one** review per `(userId, reservationId)` — upsert on repeat submit (typically for **top-level** rows only, i.e. `parentId == null`).
+- When `parentId` is set, validate parent exists, `parent.restaurantId === restaurantId`, and enforce max thread depth if required.
 
 ### Indexes
 
-- `{ restaurantId: 1, createdAt: -1 }` — public review feed for a restaurant.
+- `{ restaurantId: 1, createdAt: -1 }` — public review feed for a restaurant (filter `parentId: null` for top-level only).
+- `{ parentId: 1, createdAt: -1 }` **sparse** — list replies under one review.
+- `{ restaurantId: 1, parentId: 1, createdAt: -1 }` — venue feed grouped by thread.
 - `{ userId: 1, createdAt: -1 }` — "my reviews".
 - `{ userId: 1, reservationId: 1 }` **unique sparse** — one review per reservation when `reservationId` is present.
 - `{ restaurantId: 1, userId: 1 }` — optional guard if the product allows only one review per user per restaurant **lifetime** (policy choice; if not required, skip this index).
@@ -68,8 +77,8 @@ type Review = {
 
 On every insert/update/delete of a review affecting a restaurant, recompute on `restaurants`:
 
-- `reviewCount` — number of `reviews` documents for that `restaurantId` (includes comment-only rows).
-- `averageRating` — object of **Decimal128** means, one field per dimension that has at least one submitted score in the corpus; dimensions with no data are omitted or `null`. `overall` mean uses only reviews where `rating.overall` was provided.
+- `reviewCount` — usually **top-level only** (`parentId == null`); if you include replies, state that explicitly in product rules.
+- `averageRating` — typically computed from **top-level** reviews only; same dimensional rules as before. Replies may be excluded so thread chatter does not skew venue scores.
 
 See `[restaurants.md](./restaurants.md)` for the exact field names on the tenant document.
 

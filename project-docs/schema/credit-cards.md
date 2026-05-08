@@ -2,154 +2,80 @@
 
 In-app **stored-value cards** that are visually and functionally distinct from **wallets**:
 
-- **Wallet** (`customer_users.wallets`): domestic / foreign / bonus pools funded by top-ups, gifts, and rewards — no card number or passcode.
-- **Credit-style card** (`customer_users.cards[]`): user-issued card with **card number + passcode** for access; optional **family / linked access** with owner approval; balances live only on **owned** cards.
+- **Wallet** (`customer_users.wallets`): domestic / foreign / bonus pools — no card number or passcode.
+- **Credit-style card** (`cards` collection): **only** identifier, card number, passcode, and KRW/USD balances — see below.
+- **User pointers** (`customer_users`): **`ownedCardIds`** and **`linkedCardIds`** — arrays of `ObjectId` → `cards._id`. Ownership and “who may use which card” are expressed here, not on the card row.
 
-Cards are **not** PSP tokenized payment methods (`paymentMethods[]`); they are first-party ledger buckets with hashed secrets.
+Cards are **not** PSP payment methods (`paymentMethods[]`).
 
 Source READMEs:
 
 - `reservation/Profile/README.md` (wallets vs cards UI)
 
-## Data layout
+## Collections
 
-| Where | Purpose |
-| ----- | ------- |
-| `customer_users.cards[]` | Single array mixing **owned** (real card + balance + secrets + link ACL) and **linked** (reference only — no copied balance or password). |
-| `card_transactions` | Append-only payment / transfer history against cards; unbounded growth — **not** embedded on the user. |
+| Collection          | Purpose                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `cards`             | Minimal row: number, passcode, KRW/USD balances only.        |
+| `card_transactions` | Append-only spend / transfer history (unbounded).          |
 
-Terminology: docs use `userId` (this codebase’s `customer_users._id`). The product may still label the screen "profile".
+Terminology: `userId` means `customer_users._id`.
 
 ---
 
-## Embedded `customer_users.cards[]`
+## `cards`
 
-Discriminate with `cardKind`.
-
-### Shared / security
-
-- **Never** store raw passcode or full card number. Store `passwordHash`, `cardNumberHash`, and `cardNumberLast4` for display.
-- Lookup for link or pay-by-number: hash the submitted card number with a **server-side pepper**, match `cardNumberHash`, then verify passcode against `passwordHash`.
-
-### `cardKind: "owned"`
+**Canonical shape — these fields only** (plus MongoDB `_id`):
 
 ```ts
-type OwnedCard = {
+type Card = {
   _id: ObjectId;
-  cardKind: "owned";
-
-  /** Display name on the card ("Mom Family Card"). */
-  name: string;
-
-  cardNumberHash: string;
-  cardNumberLast4: string;
-  passwordHash: string;
-
-  /**
-   * Per-currency balances for this card only (distinct from wallet pools).
-   * Same shape idea as wallet: available vs locked.
-   */
-  balances: Record<
-    string, // "KRW" | "USD" | ...
-    { available: Decimal128; locked: Decimal128 }
-  >;
-
-  isFrozen: boolean;
-
-  /** Owner allows new users to request linking this card (number + passcode). */
-  allowExternalLink: boolean;
-
-  /** Linked users with `active` may spend only when this is true (and other checks pass). */
-  allowExternalUse: boolean;
-
-  linkedUsers: Array<{
-    userId: ObjectId; // child / linked customer
-    status: "pending_approval" | "active" | "revoked";
-
-    permissions: {
-      canSpend: boolean;
-      canViewBalance: boolean;
-      canViewTransactions: boolean;
-    };
-
-    /** Optional per-currency daily caps for this linked user. */
-    limits?: Record<string, { daily: Decimal128 }>;
-
-    linkedAt: Date;
-    decidedAt?: Date; // when approved or revoked
-  }>;
-
-  createdAt: Date;
-  updatedAt: Date;
+  cardNumber: string;
+  passCode: string;
+  balanceKrw: Decimal128;
+  balanceUsd: Decimal128;
 };
 ```
 
-### `cardKind: "linked"`
+No `ownerUserId`, `linkedUsers`, freeze flags, or timestamps on this collection unless you explicitly extend the product later.
 
-Holds **only** a reference to someone else’s owned card. No `passwordHash`, no `cardNumberHash`, and **no** balance copy.
+### Indexes
+
+- `{ cardNumber: 1 }` **unique** — if every card number is globally unique (typical).
+
+### Security note
+
+Prefer **hashing or encryption at rest** for `cardNumber` and `passCode` in production; the logical model above names the plaintext fields the product conceptually uses.
+
+---
+
+## `customer_users` (card fields only)
 
 ```ts
-type LinkedCard = {
-  _id: ObjectId;
-  cardKind: "linked";
+type CustomerUserCardRefs = {
+  /** This user created/owns these cards (`cards._id`). */
+  ownedCardIds: ObjectId[];
 
-  /** Local label ("Mom's Card"). */
-  alias: string;
-
-  ownerUserId: ObjectId; // -> customer_users
-  ownerCardId: ObjectId; // -> cards[]._id on owner's document
-
-  status: "pending_approval" | "active" | "revoked";
-
-  permissions: {
-    canSpend: boolean;
-    canViewBalance: boolean;
-    canViewTransactions: boolean;
-  };
-
-  linkedAt: Date;
+  /** This user may spend/view these cards as a linked holder (policy outside `cards`). */
+  linkedCardIds: ObjectId[];
 };
 ```
 
-### Control flags (owned card)
+Link requests, approval state, permissions, daily limits, freeze, and display aliases **cannot** live on the minimal `cards` document — model them on `customer_users` (embedded structs) or a separate small collection if you need them.
 
-| Field | Meaning |
-| ----- | ------- |
-| `isFrozen` | Card cannot be used by **anyone** (owner or linked). |
-| `allowExternalLink` | New link requests can be started (number + passcode flow). |
-| `allowExternalUse` | Existing **active** linked users may spend (subject to permissions and limits). |
+### Invariants
 
----
-
-## Link flow (requires approval)
-
-```text
-1. User B enters owner card number + passcode.
-2. Server finds owner user A where A.cards[].cardNumberHash matches (owned card).
-3. Server verifies passcode; rejects if isFrozen, !allowExternalLink, or duplicate link.
-4. Server appends to A.cards[ownerIdx].linkedUsers: { userId: B, status: "pending_approval", ... }.
-5. Server appends to B.cards[]: { cardKind: "linked", ownerUserId: A, ownerCardId, status: "pending_approval", ... }.
-6. Owner A approves → both sides' entries move to status: "active" (permissions and limits as configured).
-```
-
-Until approved, B must not spend or see balance (per product UX).
+- Every `ownedCardIds[i]` and `linkedCardIds[i]` must reference an existing `cards._id`.
+- **Balances**: only `balanceKrw` / `balanceUsd` on the `cards` row are authoritative for card stored value.
 
 ---
 
-## Spending resolution
+## Link & spend (high level)
 
-Spend **always** mutates the **owner’s** `OwnedCard.balances** — never a field on `LinkedCard`.
+- **Link**: verify `cardNumber` + `passCode` against the `cards` row, then update **users’** id arrays / link metadata (not fields on `cards`).
+- **Spend**: debit `cards.balanceKrw` or `balanceUsd` in one transaction; enforce “may this user use this card?” using `ownedCardIds` / `linkedCardIds` plus your link policy.
 
-Preconditions (all must pass):
-
-```text
-Linked: linked card status is active; owner user + owner card exist; owner card is owned, not frozen;
-        allowExternalUse; linkedUsers row for this user is active; canSpend; within limits; sufficient balance.
-
-Owner:  card not frozen; sufficient available balance; move funds available → locked or debit per your txn pattern.
-```
-
-Emit a `card_transactions` row for audit and feeds.
+Emit **`card_transactions`** for audit.
 
 ---
 
@@ -158,25 +84,18 @@ Emit a `card_transactions` row for audit and feeds.
 ```ts
 type CardTransaction = {
   _id: ObjectId;
-
-  /** Customer who initiated the spend (owner or linked user). */
   usedByUserId: ObjectId;
-
+  cardId: ObjectId;
+  /** Resolve owner by finding the user whose `ownedCardIds` contains `cardId`. */
   ownerUserId: ObjectId;
-  ownerCardId: ObjectId;
-
-  /** Whether the spender used their own physical card or a linked reference. */
   cardKindSpentAs: "owned" | "linked";
-
-  amount: { amount: Decimal128; currency: string };
+  amount: { amount: Decimal128; currency: "KRW" | "USD" | string };
   type: "payment" | "transfer" | "adjustment" | string;
   status: "pending" | "completed" | "failed" | "reversed";
-
   restaurantId?: ObjectId;
   reservationId?: ObjectId;
   orderId?: ObjectId;
   paymentId?: ObjectId;
-
   createdAt: Date;
 };
 ```
@@ -184,7 +103,8 @@ type CardTransaction = {
 ### Indexes
 
 - `{ usedByUserId: 1, createdAt: -1 }`
-- `{ ownerUserId: 1, ownerCardId: 1, createdAt: -1 }`
+- `{ cardId: 1, createdAt: -1 }`
+- `{ ownerUserId: 1, cardId: 1, createdAt: -1 }`
 - `{ restaurantId: 1, createdAt: -1 }` (sparse)
 - `{ reservationId: 1 }` (sparse)
 
@@ -192,10 +112,11 @@ type CardTransaction = {
 
 ## Cross-document rules
 
-- Card balance caches on the owned card are authoritative for the card product; they are **not** the same as `customer_users.wallets`. Transfers between wallet and card (if ever allowed) are explicit operations with double-entry style rows in `card_transactions` and/or `wallet_transactions`.
-- Cap `customer_users.cards` length in product policy (e.g. ≤ 100) so embedding stays bounded; `card_transactions` stays unbounded in its own collection.
+- **Single source of truth** for card money: `cards.balanceKrw` / `balanceUsd` only.
+- Card history: append-only `card_transactions`.
 
 ## Realtime channels
 
-- `user.cards.updated`
+- `user.cardRefs.updated`
+- `card.balances.updated` (optional, when a `cards` balance changes)
 - `card.transaction.created`

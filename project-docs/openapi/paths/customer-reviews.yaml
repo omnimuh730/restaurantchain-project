@@ -24,9 +24,17 @@ x-operations:
     description: |
       Reads from `reviews`. Works anonymously; optional `customerAuth` may hide blocked
       content or personalize sort in the future.
+
+      Use `parentId` query: omit or `null` for top-level reviews only; pass a review id to list
+      direct replies under that thread.
     security: []
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/RestaurantIdPath'
+      - name: parentId
+        in: query
+        required: false
+        description: 'If omitted, return top-level reviews only (documents with `parentId` null). If set, return direct replies to that review id.'
+        schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
       - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
       - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
     responses:
@@ -80,6 +88,9 @@ x-operations:
       When `reservationId` is provided, the server enforces one review per
       `(userId, reservationId)` and may mirror `reservations.reviewId` / legacy
       `rating` fields for the Dining tab.
+
+      Optional `parentId`: omit or `null` for a top-level review; set to another review's id
+      to create a **reply** (sub-thread). Parent must be same `restaurantId`; nesting rules are product-defined.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:

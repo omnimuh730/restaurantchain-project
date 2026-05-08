@@ -1,5 +1,5 @@
 erDiagram
-%% The 14-collection compromise schema. Lines marked with `||--o{` mean
+%% The 15-collection compromise schema. Lines marked with `||--o{` mean
 %% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
 %% Cache fields living on `customer_users` (wallets, rewards, notifUnread) are
 %% kept in sync atomically with the authoritative ledger collections.
@@ -12,6 +12,9 @@ erDiagram
     customer_users ||--o{ support_conversations : "opens"
     customer_users ||--o{ reviews : "writes"
     customer_users ||--o{ card_transactions : "card spend"
+    customer_users }o--o{ cards : "ownedCardIds linkedCardIds"
+
+    cards ||--o{ card_transactions : "debited"
 
     restaurants ||--o{ reservations : "hosts"
     restaurants ||--o{ reviews : "summarized by"
@@ -52,6 +55,8 @@ erDiagram
         array  friends
         object referral
         object dailyBonus
+        array  ownedCardIds
+        array  linkedCardIds
     }
     restaurants {
         ObjectId _id
@@ -105,6 +110,13 @@ erDiagram
         string   direction
         decimal  amount
         decimal  balanceAfter
+    }
+    cards {
+        ObjectId _id
+        string   cardNumber
+        string   passCode
+        decimal  balanceKrw
+        decimal  balanceUsd
     }
     points_ledger {
         ObjectId _id

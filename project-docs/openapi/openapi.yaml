@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    14-collection MongoDB schema in `project-docs/schema/`.
+    15-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -128,11 +128,7 @@ paths:
   /me/cards:                               { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ListMyCards' }, post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/CreateOwnedCard' } }
   /me/cards/transactions:                  { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ListCardTransactions' } }
   /me/cards:link-request:                  { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/RequestLinkByNumber' } }
-  /me/cards/{cardId}:                      { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/GetMyCard' }, patch: { $ref: './paths/customer-credit-cards.yaml#/x-operations/PatchOwnedCard' } }
-  /me/cards/{cardId}:freeze:               { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/FreezeCard' } }
-  /me/cards/{cardId}:unfreeze:             { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/UnfreezeCard' } }
-  /me/cards/{cardId}/linked-users/{userId}:approve: { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/ApproveLinkedUser' } }
-  /me/cards/{cardId}/linked-users/{userId}:revoke:  { post: { $ref: './paths/customer-credit-cards.yaml#/x-operations/RevokeLinkedUser' } }
+  /me/cards/{cardId}:                      { get: { $ref: './paths/customer-credit-cards.yaml#/x-operations/GetMyCard' } }
 
   # ============ Customer · Reviews ============
   /me/reviews:                             { get: { $ref: './paths/customer-reviews.yaml#/x-operations/ListMyReviews' }, post: { $ref: './paths/customer-reviews.yaml#/x-operations/UpsertReview' } }

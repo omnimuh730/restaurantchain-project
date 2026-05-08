@@ -5,13 +5,13 @@ Canonical MongoDB collection schemas derived from the page-driven READMEs in:
 - `api-docs/page-driven/pos/` (restaurant/staff facing)
 - `api-docs/page-driven/reservation/` (customer facing)
 
-This schema follows a **simplified 14-collection design**: aggressive embedding for bounded data, separate collections only for unbounded growth (ledgers, notifications, reviews, card spend), realtime contention (tables), or audit-critical history (payments).
+This schema follows a **simplified 15-collection design**: aggressive embedding for bounded data, separate collections only for unbounded growth (ledgers, notifications, reviews, card spend), realtime contention (tables), or audit-critical history (payments).
 
 ## Collection list
 
 | # | Collection | File | Notes |
 |---|---|---|---|
-| 1 | `customer_users` | [`users.md`](./users.md) | Embeds wallets cache, **credit-style `cards[]`**, rewards cache, saved items, friends, payment methods, daily-bonus history, and customer Pro subscription summary. |
+| 1 | `customer_users` | [`users.md`](./users.md) | Embeds wallets cache, **`ownedCardIds` / `linkedCardIds`** (refs to `cards`), rewards cache, saved items, friends, payment methods, daily-bonus history, and customer Pro subscription summary. |
 | 2 | `staff_users` | [`users.md`](./users.md) | POS staff identities and permissions. |
 | 3 | `restaurants` | [`restaurants.md`](./restaurants.md) | Embeds settings, floors, simplified menu items, primary/secondary phones, deposit cards; **`reviewCount` + `averageRating`** denormalized from `reviews`. |
 | 4 | `tables` | [`tables.md`](./tables.md) | Separate — operational realtime state. |
@@ -24,7 +24,8 @@ This schema follows a **simplified 14-collection design**: aggressive embedding 
 | 11 | `support_conversations` | [`support.md`](./support.md) | Embeds `messages[]`. |
 | 12 | `metadata` | [`metadata.md`](./metadata.md) | Read-mostly catalogs (security questions, plans, tiers, amenities, preferences, support articles) as one doc per catalog. |
 | 13 | `reviews` | [`reviews.md`](./reviews.md) | Restaurant reviews; optional per-dimension stars and optional comment; optional `reservationId`. |
-| 14 | `card_transactions` | [`credit-cards.md`](./credit-cards.md) | Append-only spend/transfer history for in-app cards (distinct from `wallet_transactions`). |
+| 14 | `cards` | [`credit-cards.md`](./credit-cards.md) | Minimal stored-value card: `cardNumber`, `passCode`, `balanceKrw`, `balanceUsd` only. |
+| 15 | `card_transactions` | [`credit-cards.md`](./credit-cards.md) | Append-only spend/transfer history for in-app cards (distinct from `wallet_transactions`). |
 
 Plus auxiliary auth-infra collections (TTL'd, isolated): `sessions`, `password_reset_sessions`. Documented in `users.md`.
 
@@ -70,6 +71,7 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 |---|---|
 | `tables` | Operational realtime state changed concurrently by multiple staff; separate to avoid contention on the restaurant doc. |
 | `wallet_transactions` | Append-only money ledger; unbounded growth; financial audit; power-user volume exceeds safe embedding. |
+| `cards` | Stored-value credentials + balances; kept separate from `customer_users` so the user doc only holds `ownedCardIds` / `linkedCardIds`. |
 | `card_transactions` | Append-only card spend ledger; unbounded growth; same rationale as wallet ledger but for stored-value cards. |
 | `reviews` | Unbounded user-generated content; public listings and moderation; drives denormalized aggregates on `restaurants`. |
 | `points_ledger` | Append-only loyalty ledger; required to explain tier and reverse fraud. |

@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    14-collection MongoDB schema in `project-docs/schema/`.
+    15-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -2351,10 +2351,11 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: listMyCards
-      summary: List owned and linked cards for the Profile cards UI.
-      description: Never returns `passwordHash` or `cardNumberHash`; only last4 on owned cards.
+      summary: List cards referenced from `ownedCardIds` and `linkedCardIds`.
+      description: Never returns `passCode`. `cardNumber` may be masked per policy.
       responses:
         '200':
+          description: Cards.
           content:
             application/json:
               schema:
@@ -2365,17 +2366,17 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/CustomerCard'
+                      $ref: '#/components/schemas/CardResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
     post:
       tags:
         - Customer · Credit cards
       operationId: createOwnedCard
-      summary: Issue a new owned card (name, passcode, optional initial top-up policy).
+      summary: Create a `cards` row and append its id to `ownedCardIds`.
       description: |
-        Server generates card number, stores `cardNumberHash` + `cardNumberLast4` + `passwordHash`.
-        Enforces max cards per user policy.
+        Server assigns a unique `cardNumber`, persists `passCode` on the card document,
+        initializes balances (e.g. zero). Returns a safe projection without `passCode`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -2385,27 +2386,15 @@ paths:
             schema:
               type: object
               required:
-                - name
-                - passcode
+                - passCode
               properties:
-                name:
-                  type: string
-                  minLength: 1
-                  maxLength: 80
-                passcode:
+                passCode:
                   type: string
                   minLength: 4
                   maxLength: 12
-                  description: Numeric PIN-style code; never stored raw.
-                allowExternalLink:
-                  type: boolean
-                  default: false
-                allowExternalUse:
-                  type: boolean
-                  default: false
       responses:
         '201':
-          description: Created owned card; returns display-safe fields and one-time full card number if product shows it once.
+          description: Created.
           content:
             application/json:
               schema:
@@ -2414,10 +2403,10 @@ paths:
                   - card
                 properties:
                   card:
-                    $ref: '#/components/schemas/OwnedCardResponse'
-                  cardNumberFull:
+                    $ref: '#/components/schemas/CardResponse'
+                  cardNumber:
                     type: string
-                    description: Optional one-time plaintext number for owner to save; omitted in high-security mode.
+                    description: Optional one-time plaintext number for the owner to save.
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '422':
@@ -2427,17 +2416,17 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: listCardTransactions
-      summary: History for cards the user owns or can view per permissions.
+      summary: History for cards the user owns or is linked to.
       parameters:
         - name: cardId
           in: query
           schema:
             $ref: '#/components/schemas/ObjectId'
-          description: Filter to one card (owned id or linked id — server resolves to owner card).
         - $ref: '#/components/parameters/CursorQuery'
         - $ref: '#/components/parameters/LimitQuery'
       responses:
         '200':
+          description: Transactions.
           content:
             application/json:
               schema:
@@ -2456,11 +2445,10 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: requestLinkByNumber
-      summary: Start linked access by entering another user's card number + passcode.
+      summary: Verify card number + passCode and attach a link for the current user (policy on `customer_users`).
       description: |
-        Server resolves owner via `cardNumberHash`, verifies passcode, checks `allowExternalLink`
-        and not frozen. Creates `pending_approval` on owner's `linkedUsers` and on requester's
-        `cards[]` linked stub until the owner approves.
+        On success, implementation updates link metadata / `linkedCardIds` as designed; **`cards`** stays
+        five fields only.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -2471,29 +2459,24 @@ paths:
               type: object
               required:
                 - cardNumber
-                - passcode
+                - passCode
               properties:
                 cardNumber:
                   type: string
-                  description: Full card number as entered by user.
-                passcode:
+                passCode:
                   type: string
-                alias:
-                  type: string
-                  maxLength: 80
-                  description: Label on requester device (e.g. Mom's Card).
       responses:
         '202':
-          description: Link request pending owner approval.
+          description: Linked access granted or pending per product rules.
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - linkedCard
+                  - card
                 properties:
-                  linkedCard:
-                    $ref: '#/components/schemas/LinkedCardResponse'
+                  card:
+                    $ref: '#/components/schemas/CardResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
@@ -2505,137 +2488,16 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: getMyCard
-      summary: Card detail (owned balances or linked reference + effective permissions).
+      summary: Fetch one card the caller owns or holds via `linkedCardIds`.
       parameters:
         - $ref: '#/components/parameters/CardIdPath'
       responses:
         '200':
+          description: Card.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerCard'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    patch:
-      tags:
-        - Customer · Credit cards
-      operationId: patchOwnedCard
-      summary: Update owned card metadata or external-link flags.
-      parameters:
-        - $ref: '#/components/parameters/CardIdPath'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  minLength: 1
-                  maxLength: 80
-                allowExternalLink:
-                  type: boolean
-                allowExternalUse:
-                  type: boolean
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OwnedCardResponse'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /me/cards/{cardId}:freeze:
-    post:
-      tags:
-        - Customer · Credit cards
-      operationId: freezeCard
-      summary: Set `isFrozen` on an owned card (blocks all spend including linked users).
-      parameters:
-        - $ref: '#/components/parameters/CardIdPath'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OwnedCardResponse'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /me/cards/{cardId}:unfreeze:
-    post:
-      tags:
-        - Customer · Credit cards
-      operationId: unfreezeCard
-      summary: Clear `isFrozen` on an owned card.
-      parameters:
-        - $ref: '#/components/parameters/CardIdPath'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OwnedCardResponse'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /me/cards/{cardId}/linked-users/{userId}:approve:
-    post:
-      tags:
-        - Customer · Credit cards
-      operationId: approveLinkedUser
-      summary: Owner approves a pending linked user on an owned card.
-      parameters:
-        - $ref: '#/components/parameters/CardIdPath'
-        - $ref: '#/components/parameters/LinkedCustomerUserIdPath'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                permissions:
-                  $ref: '#/components/schemas/CardLinkPermissions'
-                limits:
-                  type: object
-                  additionalProperties:
-                    type: object
-                    required:
-                      - daily
-                    properties:
-                      daily:
-                        $ref: '#/components/schemas/Money'
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OwnedCardResponse'
-        '401':
-          $ref: '#/components/responses/Unauthenticated'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /me/cards/{cardId}/linked-users/{userId}:revoke:
-    post:
-      tags:
-        - Customer · Credit cards
-      operationId: revokeLinkedUser
-      summary: Owner revokes linked access; requester's linked card becomes revoked.
-      parameters:
-        - $ref: '#/components/parameters/CardIdPath'
-        - $ref: '#/components/parameters/LinkedCustomerUserIdPath'
-      responses:
-        '204':
-          $ref: '#/components/responses/NoContent'
+                $ref: '#/components/schemas/CardResponse'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
@@ -2680,6 +2542,9 @@ paths:
         When `reservationId` is provided, the server enforces one review per
         `(userId, reservationId)` and may mirror `reservations.reviewId` / legacy
         `rating` fields for the Dining tab.
+
+        Optional `parentId`: omit or `null` for a top-level review; set to another review's id
+        to create a **reply** (sub-thread). Parent must be same `restaurantId`; nesting rules are product-defined.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -3794,9 +3659,18 @@ paths:
       description: |
         Reads from `reviews`. Works anonymously; optional `customerAuth` may hide blocked
         content or personalize sort in the future.
+
+        Use `parentId` query: omit or `null` for top-level reviews only; pass a review id to list
+        direct replies under that thread.
       security: []
       parameters:
         - $ref: '#/components/parameters/RestaurantIdPath'
+        - name: parentId
+          in: query
+          required: false
+          description: If omitted, return top-level reviews only (documents with `parentId` null). If set, return direct replies to that review id.
+          schema:
+            $ref: '#/components/schemas/ObjectId'
         - $ref: '#/components/parameters/CursorQuery'
         - $ref: '#/components/parameters/LimitQuery'
       responses:
@@ -8129,13 +8003,6 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/ObjectId'
-    LinkedCustomerUserIdPath:
-      name: userId
-      in: path
-      required: true
-      schema:
-        $ref: '#/components/schemas/ObjectId'
-      description: Target customer user id (e.g. linked card requester to approve or revoke).
     ReviewIdPath:
       name: reviewId
       in: path
@@ -8585,152 +8452,6 @@ components:
           format: date-time
         cancelAtPeriodEnd:
           type: boolean
-    CardLinkPermissions:
-      type: object
-      required:
-        - canSpend
-        - canViewBalance
-        - canViewTransactions
-      properties:
-        canSpend:
-          type: boolean
-        canViewBalance:
-          type: boolean
-        canViewTransactions:
-          type: boolean
-    CardLinkedUser:
-      type: object
-      required:
-        - userId
-        - status
-        - permissions
-        - linkedAt
-      properties:
-        userId:
-          $ref: '#/components/schemas/ObjectId'
-        status:
-          type: string
-          enum:
-            - pending_approval
-            - active
-            - revoked
-        permissions:
-          $ref: '#/components/schemas/CardLinkPermissions'
-        limits:
-          type: object
-          additionalProperties:
-            type: object
-            required:
-              - daily
-            properties:
-              daily:
-                $ref: '#/components/schemas/Money'
-        linkedAt:
-          type: string
-          format: date-time
-        decidedAt:
-          type: string
-          format: date-time
-    OwnedCardResponse:
-      type: object
-      required:
-        - id
-        - cardKind
-        - name
-        - cardNumberLast4
-        - balances
-        - isFrozen
-        - allowExternalLink
-        - allowExternalUse
-        - linkedUsers
-        - createdAt
-        - updatedAt
-      properties:
-        id:
-          $ref: '#/components/schemas/ObjectId'
-        cardKind:
-          type: string
-          enum:
-            - owned
-        name:
-          type: string
-        cardNumberLast4:
-          type: string
-          pattern: ^[0-9]{4}$
-        balances:
-          type: object
-          description: Currency code -> available/locked decimal strings.
-          additionalProperties:
-            type: object
-            required:
-              - available
-              - locked
-            properties:
-              available:
-                type: string
-              locked:
-                type: string
-        isFrozen:
-          type: boolean
-        allowExternalLink:
-          type: boolean
-        allowExternalUse:
-          type: boolean
-        linkedUsers:
-          type: array
-          items:
-            $ref: '#/components/schemas/CardLinkedUser'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    LinkedCardResponse:
-      type: object
-      required:
-        - id
-        - cardKind
-        - alias
-        - ownerUserId
-        - ownerCardId
-        - status
-        - permissions
-        - linkedAt
-      properties:
-        id:
-          $ref: '#/components/schemas/ObjectId'
-        cardKind:
-          type: string
-          enum:
-            - linked
-        alias:
-          type: string
-        ownerUserId:
-          $ref: '#/components/schemas/ObjectId'
-        ownerCardId:
-          $ref: '#/components/schemas/ObjectId'
-        status:
-          type: string
-          enum:
-            - pending_approval
-            - active
-            - revoked
-        permissions:
-          $ref: '#/components/schemas/CardLinkPermissions'
-        linkedAt:
-          type: string
-          format: date-time
-    CustomerCard:
-      description: Owned or linked card row from `customer_users.cards[]` (API-safe projection).
-      oneOf:
-        - $ref: '#/components/schemas/OwnedCardResponse'
-        - $ref: '#/components/schemas/LinkedCardResponse'
-      discriminator:
-        propertyName: cardKind
-        mapping:
-          owned: '#/components/schemas/OwnedCardResponse'
-          linked: '#/components/schemas/LinkedCardResponse'
     CustomerUser:
       type: object
       required:
@@ -8792,11 +8513,16 @@ components:
           oneOf:
             - $ref: '#/components/schemas/CustomerSubscriptionSummary'
             - type: 'null'
-        cards:
+        ownedCardIds:
           type: array
-          description: In-app stored-value cards (owned + linked); see `/me/cards`.
+          description: ObjectIds of `cards` this user owns.
           items:
-            $ref: '#/components/schemas/CustomerCard'
+            $ref: '#/components/schemas/ObjectId'
+        linkedCardIds:
+          type: array
+          description: ObjectIds of `cards` this user may use per link policy (not stored on `cards`).
+          items:
+            $ref: '#/components/schemas/ObjectId'
         createdAt:
           type: string
           format: date-time
@@ -9384,13 +9110,41 @@ components:
             - succeeded
             - failed
             - cancelled
+    CardResponse:
+      description: |
+        API view of a `cards` row. `passCode` exists only in MongoDB — never returned.
+        `access` is relative to the authenticated user (owned vs linked id list).
+      type: object
+      required:
+        - id
+        - cardNumber
+        - balanceKrw
+        - balanceUsd
+        - access
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        cardNumber:
+          type: string
+          description: Full or masked per product policy.
+        balanceKrw:
+          type: string
+          description: Decimal128 as string.
+        balanceUsd:
+          type: string
+          description: Decimal128 as string.
+        access:
+          type: string
+          enum:
+            - owned
+            - linked
     CardTransaction:
       type: object
       required:
         - id
         - usedByUserId
+        - cardId
         - ownerUserId
-        - ownerCardId
         - cardKindSpentAs
         - amount
         - type
@@ -9401,9 +9155,9 @@ components:
           $ref: '#/components/schemas/ObjectId'
         usedByUserId:
           $ref: '#/components/schemas/ObjectId'
-        ownerUserId:
+        cardId:
           $ref: '#/components/schemas/ObjectId'
-        ownerCardId:
+        ownerUserId:
           $ref: '#/components/schemas/ObjectId'
         cardKindSpentAs:
           type: string
@@ -9466,6 +9220,7 @@ components:
         - id
         - restaurantId
         - userId
+        - parentId
         - createdAt
         - updatedAt
       properties:
@@ -9475,6 +9230,11 @@ components:
           $ref: '#/components/schemas/ObjectId'
         userId:
           $ref: '#/components/schemas/ObjectId'
+        parentId:
+          description: Top-level review when null; otherwise id of parent review (reply / sub-thread).
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
         reservationId:
           oneOf:
             - $ref: '#/components/schemas/ObjectId'
@@ -9503,6 +9263,11 @@ components:
       properties:
         restaurantId:
           $ref: '#/components/schemas/ObjectId'
+        parentId:
+          description: Omit or null for a top-level review; set to an existing review id to post a reply.
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
         reservationId:
           $ref: '#/components/schemas/ObjectId'
         rating:

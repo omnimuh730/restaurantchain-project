@@ -3,8 +3,9 @@ info:
   title: 'CatchTable Page-Driven — Customer Credit-style Cards'
   version: 1.0.0
   description: |
-    In-app stored-value cards on `customer_users.cards[]` plus `card_transactions` ledger.
-    Distinct from `/me/wallets` (pools) and PSP `/me/payment-methods`.
+    In-app stored-value cards: **`cards`** collection holds only `cardNumber`, `passCode`,
+    `balanceKrw`, `balanceUsd`. **`customer_users`** stores `ownedCardIds` / `linkedCardIds` only.
+    Append-only history in **`card_transactions`**. Distinct from `/me/wallets` and PSP `/me/payment-methods`.
 paths:
   /me/cards:
     get: { $ref: '#/x-operations/ListMyCards' }
@@ -15,24 +16,16 @@ paths:
     post: { $ref: '#/x-operations/RequestLinkByNumber' }
   /me/cards/{cardId}:
     get: { $ref: '#/x-operations/GetMyCard' }
-    patch: { $ref: '#/x-operations/PatchOwnedCard' }
-  /me/cards/{cardId}:freeze:
-    post: { $ref: '#/x-operations/FreezeCard' }
-  /me/cards/{cardId}:unfreeze:
-    post: { $ref: '#/x-operations/UnfreezeCard' }
-  /me/cards/{cardId}/linked-users/{userId}:approve:
-    post: { $ref: '#/x-operations/ApproveLinkedUser' }
-  /me/cards/{cardId}/linked-users/{userId}:revoke:
-    post: { $ref: '#/x-operations/RevokeLinkedUser' }
 
 x-operations:
   ListMyCards:
     tags: [Customer · Credit cards]
     operationId: listMyCards
-    summary: List owned and linked cards for the Profile cards UI.
-    description: Never returns `passwordHash` or `cardNumberHash`; only last4 on owned cards.
+    summary: List cards referenced from `ownedCardIds` and `linkedCardIds`.
+    description: Never returns `passCode`. `cardNumber` may be masked per policy.
     responses:
       '200':
+        description: Cards.
         content:
           application/json:
             schema:
@@ -41,16 +34,16 @@ x-operations:
               properties:
                 data:
                   type: array
-                  items: { $ref: '../components/schemas.yaml#/components/schemas/CustomerCard' }
+                  items: { $ref: '../components/schemas.yaml#/components/schemas/CardResponse' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
 
   CreateOwnedCard:
     tags: [Customer · Credit cards]
     operationId: createOwnedCard
-    summary: Issue a new owned card (name, passcode, optional initial top-up policy).
+    summary: Create a `cards` row and append its id to `ownedCardIds`.
     description: |
-      Server generates card number, stores `cardNumberHash` + `cardNumberLast4` + `passwordHash`.
-      Enforces max cards per user policy.
+      Server assigns a unique `cardNumber`, persists `passCode` on the card document,
+      initializes balances (e.g. zero). Returns a safe projection without `passCode`.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:
@@ -59,103 +52,47 @@ x-operations:
         application/json:
           schema:
             type: object
-            required: [name, passcode]
+            required: [passCode]
             properties:
-              name: { type: string, minLength: 1, maxLength: 80 }
-              passcode: { type: string, minLength: 4, maxLength: 12, description: 'Numeric PIN-style code; never stored raw.' }
-              allowExternalLink: { type: boolean, default: false }
-              allowExternalUse: { type: boolean, default: false }
+              passCode: { type: string, minLength: 4, maxLength: 12 }
     responses:
       '201':
-        description: Created owned card; returns display-safe fields and one-time full card number if product shows it once.
+        description: Created.
         content:
           application/json:
             schema:
               type: object
               required: [card]
               properties:
-                card: { $ref: '../components/schemas.yaml#/components/schemas/OwnedCardResponse' }
-                cardNumberFull:
+                card: { $ref: '../components/schemas.yaml#/components/schemas/CardResponse' }
+                cardNumber:
                   type: string
-                  description: Optional one-time plaintext number for owner to save; omitted in high-security mode.
+                  description: Optional one-time plaintext number for the owner to save.
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
 
   GetMyCard:
     tags: [Customer · Credit cards]
     operationId: getMyCard
-    summary: Card detail (owned balances or linked reference + effective permissions).
+    summary: Fetch one card the caller owns or holds via `linkedCardIds`.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
     responses:
       '200':
+        description: Card.
         content:
           application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/CustomerCard' }
-      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
-
-  PatchOwnedCard:
-    tags: [Customer · Credit cards]
-    operationId: patchOwnedCard
-    summary: Update owned card metadata or external-link flags.
-    parameters:
-      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              name: { type: string, minLength: 1, maxLength: 80 }
-              allowExternalLink: { type: boolean }
-              allowExternalUse: { type: boolean }
-    responses:
-      '200':
-        content:
-          application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/OwnedCardResponse' }
-      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '403': { $ref: '../components/common.yaml#/components/responses/Forbidden' }
-      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
-
-  FreezeCard:
-    tags: [Customer · Credit cards]
-    operationId: freezeCard
-    summary: Set `isFrozen` on an owned card (blocks all spend including linked users).
-    parameters:
-      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
-    responses:
-      '200':
-        content:
-          application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/OwnedCardResponse' }
-      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
-
-  UnfreezeCard:
-    tags: [Customer · Credit cards]
-    operationId: unfreezeCard
-    summary: Clear `isFrozen` on an owned card.
-    parameters:
-      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
-    responses:
-      '200':
-        content:
-          application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/OwnedCardResponse' }
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/CardResponse' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
 
   RequestLinkByNumber:
     tags: [Customer · Credit cards]
     operationId: requestLinkByNumber
-    summary: Start linked access by entering another user's card number + passcode.
+    summary: Verify card number + passCode and attach a link for the current user (policy on `customer_users`).
     description: |
-      Server resolves owner via `cardNumberHash`, verifies passcode, checks `allowExternalLink`
-      and not frozen. Creates `pending_approval` on owner's `linkedUsers` and on requester's
-      `cards[]` linked stub until the owner approves.
+      On success, implementation updates link metadata / `linkedCardIds` as designed; **`cards`** stays
+      five fields only.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:
@@ -164,80 +101,37 @@ x-operations:
         application/json:
           schema:
             type: object
-            required: [cardNumber, passcode]
+            required: [cardNumber, passCode]
             properties:
-              cardNumber: { type: string, description: 'Full card number as entered by user.' }
-              passcode: { type: string }
-              alias: { type: string, maxLength: 80, description: 'Label on requester device (e.g. Mom''s Card).' }
+              cardNumber: { type: string }
+              passCode: { type: string }
     responses:
       '202':
-        description: Link request pending owner approval.
+        description: Linked access granted or pending per product rules.
         content:
           application/json:
             schema:
               type: object
-              required: [linkedCard]
+              required: [card]
               properties:
-                linkedCard: { $ref: '../components/schemas.yaml#/components/schemas/LinkedCardResponse' }
+                card: { $ref: '../components/schemas.yaml#/components/schemas/CardResponse' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
       '409': { $ref: '../components/common.yaml#/components/responses/Conflict' }
 
-  ApproveLinkedUser:
-    tags: [Customer · Credit cards]
-    operationId: approveLinkedUser
-    summary: Owner approves a pending linked user on an owned card.
-    parameters:
-      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
-      - $ref: '../components/common.yaml#/components/parameters/LinkedCustomerUserIdPath'
-    requestBody:
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              permissions:
-                $ref: '../components/schemas.yaml#/components/schemas/CardLinkPermissions'
-              limits:
-                type: object
-                additionalProperties:
-                  type: object
-                  required: [daily]
-                  properties:
-                    daily: { $ref: '../components/common.yaml#/components/schemas/Money' }
-    responses:
-      '200':
-        content:
-          application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/OwnedCardResponse' }
-      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
-
-  RevokeLinkedUser:
-    tags: [Customer · Credit cards]
-    operationId: revokeLinkedUser
-    summary: Owner revokes linked access; requester's linked card becomes revoked.
-    parameters:
-      - $ref: '../components/common.yaml#/components/parameters/CardIdPath'
-      - $ref: '../components/common.yaml#/components/parameters/LinkedCustomerUserIdPath'
-    responses:
-      '204': { $ref: '../components/common.yaml#/components/responses/NoContent' }
-      '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
-
   ListCardTransactions:
     tags: [Customer · Credit cards]
     operationId: listCardTransactions
-    summary: History for cards the user owns or can view per permissions.
+    summary: History for cards the user owns or is linked to.
     parameters:
       - name: cardId
         in: query
         schema: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
-        description: Filter to one card (owned id or linked id — server resolves to owner card).
       - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
       - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
     responses:
       '200':
+        description: Transactions.
         content:
           application/json:
             schema:

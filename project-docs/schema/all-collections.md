@@ -1,11 +1,11 @@
-# All Collections (14)
+# All Collections (15)
 
 Single-file reference for every MongoDB collection in the system. For per-domain context, sample documents, and state diagrams, see the individual files in this directory.
 
 
 | #   | Collection              | Purpose                                                                                                                                              | Detail                                   |
 | --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | `customer_users`        | End users of the reservation app; embeds wallet cache, **credit-style `cards[]`**, rewards cache, social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
+| 1   | `customer_users`        | End users of the reservation app; embeds wallet cache, **`ownedCardIds` / `linkedCardIds`** (pointers to `cards`), rewards cache, social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
 | 2   | `staff_users`           | POS users tied to a single restaurant.                                                                                                               | `[users.md](./users.md)`                 |
 | 3   | `restaurants`           | Tenant root; embeds settings, floors, simplified menu, deposit cards, pending-staff inbox; **`reviewCount` + `averageRating` denormalized from reviews.** | `[restaurants.md](./restaurants.md)`     |
 | 4   | `tables`                | Per-floor operational state with QR; separate from `restaurants` to avoid contention.                                                                | `[tables.md](./tables.md)`               |
@@ -18,10 +18,11 @@ Single-file reference for every MongoDB collection in the system. For per-domain
 | 11  | `support_conversations` | Support thread; embeds messages.                                                                                                                     | `[support.md](./support.md)`             |
 | 12  | `metadata`              | One doc per static catalog (security questions, plans, tiers, amenities, articles, ...).                                                             | `[metadata.md](./metadata.md)`           |
 | 13  | `reviews`               | Customer-authored restaurant reviews; optional stars per dimension + optional comment; optional `reservationId`.                                       | `[reviews.md](./reviews.md)`             |
-| 14  | `card_transactions`     | Append-only ledger for in-app **card** spend (owned or linked); balances stay on owned cards only.                                                   | `[credit-cards.md](./credit-cards.md)`   |
+| 14  | `cards`                 | Minimal in-app card row: **`cardNumber`**, **`passCode`**, **`balanceKrw`**, **`balanceUsd`** only (plus `_id`).                         | `[credit-cards.md](./credit-cards.md)`   |
+| 15  | `card_transactions`     | Append-only ledger for card spend; debits always apply to a `cards` document.                                                                        | `[credit-cards.md](./credit-cards.md)`   |
 
 
-Auxiliary auth-infra (TTL'd, not part of the 12): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
+Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
 
 ## Conventions (recap)
 
@@ -60,8 +61,8 @@ type CustomerUser = {
     bonus:    { currency: string;          amount: Decimal128 };
   };
 
-  /** @see credit-cards.md — owned + linked stored-value cards (not PSP methods). */
-  cards: Array<OwnedCard | LinkedCard>;
+  ownedCardIds: ObjectId[];
+  linkedCardIds: ObjectId[];
 
   rewards: {
     tier: "silver" | "gold" | "platinum" | "diamond";
@@ -600,6 +601,8 @@ type Review = {
   userId: ObjectId;
   restaurantId: ObjectId;
   reservationId?: ObjectId | null;
+  /** `null` = top-level review; otherwise `reviews._id` of parent (sub-thread / reply). */
+  parentId?: ObjectId | null;
   rating?: ReviewRating | null;
   comment?: string | null;
   createdAt: Date;
@@ -607,18 +610,35 @@ type Review = {
 };
 ```
 
-Indexes: `{restaurantId:1, createdAt:-1}`, `{userId:1, createdAt:-1}`, `{userId:1, reservationId:1}` unique sparse.
+Indexes: `{restaurantId:1, createdAt:-1}`, `{parentId:1, createdAt:-1}` sparse, `{restaurantId:1, parentId:1, createdAt:-1}`, `{userId:1, createdAt:-1}`, `{userId:1, reservationId:1}` unique sparse.
 
 ---
 
-## 14) `card_transactions`
+## 14) `cards`
+
+```ts
+type Card = {
+  _id: ObjectId;
+  cardNumber: string;
+  passCode: string;
+  balanceKrw: Decimal128;
+  balanceUsd: Decimal128;
+};
+```
+
+Indexes: `{ cardNumber: 1 }` unique (typical).
+
+---
+
+## 15) `card_transactions`
 
 ```ts
 type CardTransaction = {
   _id: ObjectId;
   usedByUserId: ObjectId;
+  /** -> cards._id (debited row). */
+  cardId: ObjectId;
   ownerUserId: ObjectId;
-  ownerCardId: ObjectId;
   cardKindSpentAs: "owned" | "linked";
   amount: { amount: Decimal128; currency: string };
   type: "payment" | "transfer" | "adjustment" | string;
@@ -631,7 +651,7 @@ type CardTransaction = {
 };
 ```
 
-Indexes: `{usedByUserId:1, createdAt:-1}`, `{ownerUserId:1, ownerCardId:1, createdAt:-1}`, `{restaurantId:1, createdAt:-1}` sparse, `{reservationId:1}` sparse.
+Indexes: `{usedByUserId:1, createdAt:-1}`, `{cardId:1, createdAt:-1}`, `{ownerUserId:1, cardId:1, createdAt:-1}`, `{restaurantId:1, createdAt:-1}` sparse, `{reservationId:1}` sparse.
 
 ---
 

@@ -47,97 +47,39 @@ components:
           oneOf:
             - $ref: '#/components/schemas/CustomerSubscriptionSummary'
             - { type: 'null' }
-        cards:
+        ownedCardIds:
           type: array
-          description: In-app stored-value cards (owned + linked); see `/me/cards`.
-          items: { $ref: '#/components/schemas/CustomerCard' }
+          description: ObjectIds of `cards` this user owns.
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        linkedCardIds:
+          type: array
+          description: ObjectIds of `cards` this user may use per link policy (not stored on `cards`).
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
         createdAt:          { type: string, format: date-time }
         updatedAt:          { type: string, format: date-time }
         deletedAt:          { type: [string, 'null'], format: date-time }
 
-    CustomerCard:
-      description: Owned or linked card row from `customer_users.cards[]` (API-safe projection).
-      oneOf:
-        - $ref: '#/components/schemas/OwnedCardResponse'
-        - $ref: '#/components/schemas/LinkedCardResponse'
-      discriminator:
-        propertyName: cardKind
-        mapping:
-          owned: '#/components/schemas/OwnedCardResponse'
-          linked: '#/components/schemas/LinkedCardResponse'
-
-    CardLinkPermissions:
+    CardResponse:
+      description: |
+        API view of a `cards` row. `passCode` exists only in MongoDB — never returned.
+        `access` is relative to the authenticated user (owned vs linked id list).
       type: object
-      required: [canSpend, canViewBalance, canViewTransactions]
-      properties:
-        canSpend: { type: boolean }
-        canViewBalance: { type: boolean }
-        canViewTransactions: { type: boolean }
-
-    OwnedCardResponse:
-      type: object
-      required: [id, cardKind, name, cardNumberLast4, balances, isFrozen, allowExternalLink, allowExternalUse, linkedUsers, createdAt, updatedAt]
+      required: [id, cardNumber, balanceKrw, balanceUsd, access]
       properties:
         id: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        cardKind: { type: string, enum: [owned] }
-        name: { type: string }
-        cardNumberLast4: { type: string, pattern: '^[0-9]{4}$' }
-        balances:
-          type: object
-          description: Currency code -> available/locked decimal strings.
-          additionalProperties:
-            type: object
-            required: [available, locked]
-            properties:
-              available: { type: string }
-              locked: { type: string }
-        isFrozen: { type: boolean }
-        allowExternalLink: { type: boolean }
-        allowExternalUse: { type: boolean }
-        linkedUsers:
-          type: array
-          items: { $ref: '#/components/schemas/CardLinkedUser' }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    CardLinkedUser:
-      type: object
-      required: [userId, status, permissions, linkedAt]
-      properties:
-        userId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        status: { type: string, enum: [pending_approval, active, revoked] }
-        permissions: { $ref: '#/components/schemas/CardLinkPermissions' }
-        limits:
-          type: object
-          additionalProperties:
-            type: object
-            required: [daily]
-            properties:
-              daily: { $ref: './common.yaml#/components/schemas/Money' }
-        linkedAt: { type: string, format: date-time }
-        decidedAt: { type: string, format: date-time }
-
-    LinkedCardResponse:
-      type: object
-      required: [id, cardKind, alias, ownerUserId, ownerCardId, status, permissions, linkedAt]
-      properties:
-        id: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        cardKind: { type: string, enum: [linked] }
-        alias: { type: string }
-        ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        ownerCardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        status: { type: string, enum: [pending_approval, active, revoked] }
-        permissions: { $ref: '#/components/schemas/CardLinkPermissions' }
-        linkedAt: { type: string, format: date-time }
+        cardNumber: { type: string, description: 'Full or masked per product policy.' }
+        balanceKrw: { type: string, description: 'Decimal128 as string.' }
+        balanceUsd: { type: string, description: 'Decimal128 as string.' }
+        access: { type: string, enum: [owned, linked] }
 
     CardTransaction:
       type: object
-      required: [id, usedByUserId, ownerUserId, ownerCardId, cardKindSpentAs, amount, type, status, createdAt]
+      required: [id, usedByUserId, cardId, ownerUserId, cardKindSpentAs, amount, type, status, createdAt]
       properties:
         id: { $ref: './common.yaml#/components/schemas/ObjectId' }
         usedByUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        cardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
         ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        ownerCardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
         cardKindSpentAs: { type: string, enum: [owned, linked] }
         amount: { $ref: './common.yaml#/components/schemas/Money' }
         type: { type: string, enum: [payment, transfer, adjustment] }
@@ -705,11 +647,16 @@ components:
 
     RestaurantReview:
       type: object
-      required: [id, restaurantId, userId, createdAt, updatedAt]
+      required: [id, restaurantId, userId, parentId, createdAt, updatedAt]
       properties:
         id:            { $ref: './common.yaml#/components/schemas/ObjectId' }
         restaurantId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
         userId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        parentId:
+          description: 'Top-level review when null; otherwise id of parent review (reply / sub-thread).'
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
         reservationId:
           oneOf:
             - { $ref: './common.yaml#/components/schemas/ObjectId' }
@@ -730,6 +677,11 @@ components:
       required: [restaurantId]
       properties:
         restaurantId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
+        parentId:
+          description: 'Omit or null for a top-level review; set to an existing review id to post a reply.'
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
         reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
         rating:
           oneOf:
