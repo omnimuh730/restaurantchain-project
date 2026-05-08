@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     In-app **`cards`** collection: one wallet row per user (`type=wallet`, **`balanceKrw` + `balanceUsd`**)
-    and stored-value card rows (`type=card`, `cardNumber`, `passCode`, same dual balances).
+    and stored-value card rows (`type=card`, `cardNumber`, `passCodeHash`, same dual balances).
     **`customer_users`** stores **`ownedWalletId`**, `ownedCardIds`, and `linkedCardIds`.
     Append-only activity is **`wallet_transactions`**. Distinct from PSP `/me/payment-methods`.
 paths:
@@ -23,7 +23,7 @@ x-operations:
     tags: [Customer · Credit cards]
     operationId: listMyCards
     summary: List cards referenced from `ownedCardIds` and `linkedCardIds`.
-    description: Never returns `passCode`. `cardNumber` may be masked per policy.
+    description: Never returns `passCodeHash`. `cardNumber` may be masked per policy.
     responses:
       '200':
         description: Cards.
@@ -43,8 +43,8 @@ x-operations:
     operationId: createOwnedCard
     summary: Create a `cards` row (`type=card`) and append its id to `ownedCardIds`.
     description: |
-      Server assigns a unique `cardNumber`, persists `passCode` on the card document,
-      initializes balances (e.g. zero). Returns a safe projection without `passCode`.
+      Server assigns a unique `cardNumber`, hashes the request `passCode` and persists `passCodeHash`,
+      initializes balances (e.g. zero). Returns a safe projection without secrets.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:
@@ -55,7 +55,11 @@ x-operations:
             type: object
             required: [passCode]
             properties:
-              passCode: { type: string, minLength: 4, maxLength: 12 }
+              passCode:
+                type: string
+                minLength: 4
+                maxLength: 12
+                description: Plaintext pass code from the client; stored only as `passCodeHash` on the `cards` document.
     responses:
       '201':
         description: Created.
@@ -90,7 +94,7 @@ x-operations:
   RequestLinkByNumber:
     tags: [Customer · Credit cards]
     operationId: requestLinkByNumber
-    summary: Verify card number + passCode and attach a link for the current user (policy on `customer_users`).
+    summary: Verify card number + pass code (compare to `passCodeHash`) and attach a link for the current user (policy on `customer_users`).
     description: |
       On success, implementation updates link metadata / `linkedCardIds` as designed.
     parameters:
@@ -104,7 +108,9 @@ x-operations:
             required: [cardNumber, passCode]
             properties:
               cardNumber: { type: string }
-              passCode: { type: string }
+              passCode:
+                type: string
+                description: Plaintext pass code; verified against `passCodeHash` on the card row.
     responses:
       '202':
         description: Linked access granted or pending per product rules.

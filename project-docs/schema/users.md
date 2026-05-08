@@ -268,7 +268,7 @@ type PasswordResetSession = {
 ## Cross-document rules
 
 - `customer_users.passwordHash`, `staff_users.passwordHash`, and any `securityAnswers[].answerHash` are never returned to clients.
-- **`cards`** holds one wallet row (`type: "wallet"`) and zero or more card rows (`type: "card"`, `cardNumber`, `passCode`); every row has **`balanceKrw` / `balanceUsd`** (see `[cards.md](./cards.md)`). The user row stores **`ownedWalletId`**, **`ownedCardIds`**, and **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` / `passCode` on card rows.
+- **`cards`** holds one wallet row (`type: "wallet"`) and zero or more card rows (`type: "card"`, `cardNumber`, `passCodeHash`); every row has **`balanceKrw` / `balanceUsd`** (see `[cards.md](./cards.md)`). The user row stores **`ownedWalletId`**, **`ownedCardIds`**, and **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` on card rows; store **only** a hash for the pass code (`passCodeHash`).
 - Optional denormalized balance snapshots on the user (if any) and **`rewards.points`** are recomputed from **`wallet_transactions`**, **`cards`**, and **`rewards`** rows.
 - `staff_users` username is also globally unique to keep support tooling unambiguous.
 - A staff member can only belong to one restaurant; multi-restaurant chains will require a future schema split.

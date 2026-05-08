@@ -69,7 +69,7 @@ components:
 
     CardResponse:
       description: |
-        API view of a `cards` row (`type` wallet or card). `passCode` exists only in MongoDB — never returned.
+        API view of a `cards` row (`type` wallet or card). `passCodeHash` exists only in MongoDB — never returned.
         For `type=card`, `access` is relative to the authenticated user (owned vs linked id list).
       type: object
       required: [id, type, ownerUserId, balanceKrw, balanceUsd]

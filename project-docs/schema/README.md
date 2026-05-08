@@ -24,7 +24,7 @@ This schema follows a **simplified 14-collection design**: aggressive embedding 
 | 11 | `support_conversations` | [`support.md`](./support.md) | Embeds `messages[]`. |
 | 12 | `metadata` | [`metadata.md`](./metadata.md) | Read-mostly catalogs (security questions, plans, tiers, amenities, preferences, support articles) as one doc per catalog. |
 | 13 | `reviews` | [`reviews.md`](./reviews.md) | Restaurant reviews; optional stars/comment; optional `reservationId` or **`orderId`**. |
-| 14 | `cards` | [`cards.md`](./cards.md) | One **`type: "wallet"`** per user + **`type: "card"`** rows; **`balanceKrw` + `balanceUsd`** on all; cards add `cardNumber` / `passCode`. |
+| 14 | `cards` | [`cards.md`](./cards.md) | One **`type: "wallet"`** per user + **`type: "card"`** rows; **`balanceKrw` + `balanceUsd`** on all; cards add `cardNumber` / `passCodeHash`. |
 
 Plus auxiliary auth-infra collections (TTL'd, isolated): `sessions`, `password_reset_sessions`. Documented in `users.md`.
 

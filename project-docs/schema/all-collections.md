@@ -18,7 +18,7 @@ Single-file reference for every MongoDB collection in the system. For per-domain
 | 11  | `support_conversations` | Support thread; embeds messages.                                                                                                                     | `[support.md](./support.md)`             |
 | 12  | `metadata`              | One doc per static catalog (security questions, plans, tiers, amenities, articles, ...).                                                             | `[metadata.md](./metadata.md)`           |
 | 13  | `reviews`               | Customer-authored restaurant reviews; optional stars per dimension + optional comment; optional `reservationId`.                                       | `[reviews.md](./reviews.md)`             |
-| 14  | `cards`                 | **`type`** `wallet` (one per user) or `card`; **`balanceKrw` + `balanceUsd`** on every row; cards add **`cardNumber` / `passCode`**. | `[cards.md](./cards.md)`                 |
+| 14  | `cards`                 | **`type`** `wallet` (one per user) or `card`; **`balanceKrw` + `balanceUsd`** on every row; cards add **`cardNumber` / `passCodeHash`**. | `[cards.md](./cards.md)`                 |
 
 
 Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
@@ -647,7 +647,7 @@ type WalletRow = CardsRowBase & {
 type CardRow = CardsRowBase & {
   type: "card";
   cardNumber: string;
-  passCode: string;
+  passCodeHash: string;
 };
 
 type CardsDocument = WalletRow | CardRow;

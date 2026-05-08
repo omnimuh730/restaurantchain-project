@@ -13,7 +13,7 @@
     "type": "card",
     "ownerUserId": { "$oid": "65f0000000000000000c0001" },
     "cardNumber": "4812345678812",
-    "passCode": "9921",
+    "passCodeHash": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
     "balanceKrw": { "$numberDecimal": "500000" },
     "balanceUsd": { "$numberDecimal": "20.50" },
     "createdAt": { "$date": "2025-09-15T10:00:00.000Z" },

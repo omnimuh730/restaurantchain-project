@@ -5,7 +5,7 @@
 | `type`   | Meaning |
 | -------- | ------- |
 | `wallet` | **Exactly one** per customer — default main wallet; holds **both** `balanceKrw` and `balanceUsd` (no separate pool documents). |
-| `card`   | Stored-value card (`cardNumber`, `passCode`); also holds **both** `balanceKrw` and `balanceUsd`. |
+| `card`   | Stored-value card (`cardNumber`, `passCodeHash`); also holds **both** `balanceKrw` and `balanceUsd`. |
 
 This is **one MongoDB collection** with two shapes; the app UI still treats “Wallet” vs “Card” as different surfaces.
 
@@ -38,7 +38,8 @@ type WalletRow = CardsRowBase & {
 type CardRow = CardsRowBase & {
   type: "card";
   cardNumber: string;
-  passCode: string;
+  /** Argon2/bcrypt (or similar) hash of the card pass code; never store plaintext. */
+  passCodeHash: string;
 };
 
 type CardsDocument = WalletRow | CardRow;
@@ -52,7 +53,7 @@ type CardsDocument = WalletRow | CardRow;
 
 ### Security
 
-Prefer hashing/encryption at rest for `cardNumber` and `passCode` on **`type: "card"`** rows.
+Store **only** `passCodeHash` for the pass code (hash client-supplied codes on create/rotate; verify with constant-time compare). Prefer hashing or encryption at rest for `cardNumber` on **`type: "card"`** rows.
 
 ---
 
