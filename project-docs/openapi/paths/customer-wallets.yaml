@@ -33,17 +33,17 @@ x-operations:
   GetWallets:
     tags: [Customer · Wallets]
     operationId: getWallets
-    summary: Read wallet pool balances (`cards` rows for `ownedWalletIds`).
+    summary: Read main wallet balances (`customer_users.ownedWalletId` → `cards` `type=wallet`).
     description: |
-      Returns the three logical pools by resolving `customer_users.ownedWalletIds` to `cards` documents
-      (`type=wallet`). Optional denormalized `customer_users.wallets` may be used as a cache only;
-      source of truth is `cards` balances updated atomically with `wallet_transactions`.
+      Returns **`balanceKrw`** and **`balanceUsd`** from the customer’s single wallet row.
+      Optional denormalized `customer_users.wallets` may mirror the same two fields;
+      source of truth is the `cards` document updated atomically with `wallet_transactions`.
     responses:
       '200':
-        description: Wallets cache.
+        description: Wallet balances.
         content:
           application/json:
-            schema: { $ref: '../components/schemas.yaml#/components/schemas/UserWallets' }
+            schema: { $ref: '../components/schemas.yaml#/components/schemas/UserWalletBalances' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
 
   ListWalletTransactions:

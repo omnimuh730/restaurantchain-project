@@ -24,7 +24,7 @@ Source READMEs:
 
 ## `customer_users`
 
-Single source of truth for the customer's profile, **pointers to wallet and card rows** in `cards`, optional **balance/rewards cache**, **embedded social** (saved items, friends), **embedded payment methods**, **referral**, and **subscription summary**.
+Single source of truth for the customer's profile, **pointers to wallet and card rows** in `cards`, optional **balance/rewards cache**, **embedded social** (saved restaurants, friends), **optional PSP payment methods**, **referral**, and **subscription summary**. The app does **not** collect a customer phone number on the profile.
 
 ```ts
 type CustomerUser = {
@@ -34,7 +34,6 @@ type CustomerUser = {
   username: string;                 // unique, lowercased
   passwordHash: string;             // bcrypt/argon2; never returned to client
   fullName: string;
-  phone?: string;
   avatarImg?: string;               // base64 image data (not URL)
 
   status: "active" | "deactivated" | "deleted";
@@ -46,11 +45,11 @@ type CustomerUser = {
   }>;
 
   /**
-   * -> `cards._id` where `type === "wallet"` (typically domestic, foreign, bonus).
+   * -> `cards._id` where `type === "wallet"` (**exactly one** per user; provisioned by default with sign-up).
    * Authoritative balances: `cards.balanceKrw` / `balanceUsd`, updated with `wallet_transactions`.
    * @see `[cards.md](./cards.md)`
    */
-  ownedWalletIds: ObjectId[];
+  ownedWalletId: ObjectId;
 
   /**
    * -> `cards._id` where `type === "card"`.
@@ -69,8 +68,8 @@ type CustomerUser = {
     pointsToNextTier?: number;
   };
 
-  // Embedded payment methods (cards, wallets). PSP holds the sensitive data.
-  paymentMethods: Array<{
+  /** Optional — user may have no PSP methods on file. PSP holds the sensitive data. */
+  paymentMethods?: Array<{
     _id: ObjectId;
     pspProvider: string;
     pspExternalId: string;
@@ -83,12 +82,10 @@ type CustomerUser = {
     addedAt: Date;
   }>;
 
-  // Saved items (Discover -> Saved). Restaurants and individual menu items.
+  // Saved restaurants only (Discover -> Saved).
   savedItems: Array<{
     _id: ObjectId;
-    itemType: "restaurant" | "food";
-    restaurantId?: ObjectId;
-    foodId?: ObjectId;              // -> restaurants.menu.items[]._id
+    restaurantId: ObjectId;
     savedAt: Date;
   }>;
 
@@ -146,18 +143,17 @@ type CustomerUser = {
 ### Indexes
 
 - `{ username: 1 }` unique
-- `{ phone: 1 }` unique sparse
 - `{ "referral.code": 1 }` unique
 - `{ status: 1, createdAt: -1 }`
 - `{ "savedItems.restaurantId": 1 }` (multikey, for "users who saved restaurant X")
 - `{ "friends.friendId": 1, "friends.status": 1 }` (multikey, for friend-edge lookup)
-- `{ "ownedWalletIds": 1 }` (multikey), `{ "ownedCardIds": 1 }` (multikey), `{ "linkedCardIds": 1 }` (multikey) — optional; usually resolve `cards` by `_id` directly
+- `{ "ownedWalletId": 1 }`, `{ "ownedCardIds": 1 }` (multikey), `{ "linkedCardIds": 1 }` (multikey) — optional; usually resolve `cards` by `_id` directly
 
 ### Notes
 
 - The `friends` array is bounded by social graph (typical: 50–500 entries). For users projected to exceed 1k, split friends into a separate collection later — schema-compatible because `friends[]` rows already carry `friendId`.
 - `dailyBonus.history` keeps last 30 entries inline; an archive job moves older entries to a cold collection if needed for analytics.
-- `ownedWalletIds` / `ownedCardIds` / `linkedCardIds` should stay bounded (product cap). Wallet and card rows (including balances) live in the `cards` collection — see `[cards.md](./cards.md)`.
+- `ownedCardIds` / `linkedCardIds` should stay bounded (product cap). Each user has exactly one `ownedWalletId`. Wallet and card rows (including balances) live in the `cards` collection — see `[cards.md](./cards.md)`.
 
 ---
 
@@ -268,7 +264,7 @@ type PasswordResetSession = {
 ## Cross-document rules
 
 - `customer_users.passwordHash`, `staff_users.passwordHash`, and any `securityAnswers[].answerHash` are never returned to clients.
-- **`cards`** holds wallet rows (`type: "wallet"`, `pool`) and card rows (`type: "card"`, `cardNumber`, `passCode`) with **`balanceKrw` / `balanceUsd`** (see `[cards.md](./cards.md)`). The user row stores **`ownedWalletIds`**, **`ownedCardIds`**, and **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` / `passCode` on card rows.
+- **`cards`** holds one wallet row (`type: "wallet"`) and zero or more card rows (`type: "card"`, `cardNumber`, `passCode`); every row has **`balanceKrw` / `balanceUsd`** (see `[cards.md](./cards.md)`). The user row stores **`ownedWalletId`**, **`ownedCardIds`**, and **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` / `passCode` on card rows.
 - Optional denormalized balance snapshots on the user (if any) and **`rewards.points`** are recomputed from **`wallet_transactions`**, **`cards`**, and **`rewards`** rows.
 - `staff_users` username is also globally unique to keep support tooling unambiguous.
 - A staff member can only belong to one restaurant; multi-restaurant chains will require a future schema split.
@@ -277,7 +273,7 @@ type PasswordResetSession = {
 ## Realtime channels
 
 - `user.profile.updated`
-- `user.storedValue.updated` — `ownedWalletIds` / `ownedCardIds` / `linkedCardIds` changed
+- `user.storedValue.updated` — `ownedWalletId` / `ownedCardIds` / `linkedCardIds` changed
 - `cards.balances.updated`
 - `user.rewards.updated`
 - `user.friends.updated`

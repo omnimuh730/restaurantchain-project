@@ -3,10 +3,10 @@ info:
   title: 'CatchTable Page-Driven — Customer Credit-style Cards'
   version: 1.0.0
   description: |
-    In-app **`cards`** collection: both wallet rows (`type=wallet`, `pool`) and stored-value card rows
-    (`type=card`, `cardNumber`, `passCode`, balances). **`customer_users`** stores `ownedWalletIds`,
-    `ownedCardIds`, and `linkedCardIds`. Append-only activity for all accounts is **`wallet_transactions`**.
-    Distinct from PSP `/me/payment-methods`.
+    In-app **`cards`** collection: one wallet row per user (`type=wallet`, **`balanceKrw` + `balanceUsd`**)
+    and stored-value card rows (`type=card`, `cardNumber`, `passCode`, same dual balances).
+    **`customer_users`** stores **`ownedWalletId`**, `ownedCardIds`, and `linkedCardIds`.
+    Append-only activity is **`wallet_transactions`**. Distinct from PSP `/me/payment-methods`.
 paths:
   /me/cards:
     get: { $ref: '#/x-operations/ListMyCards' }

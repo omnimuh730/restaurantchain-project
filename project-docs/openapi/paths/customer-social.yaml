@@ -53,11 +53,8 @@ x-operations:
   ListSavedItems:
     tags: [Customer · Social]
     operationId: listSavedItems
-    summary: List saved restaurants and dishes.
+    summary: List saved restaurants.
     parameters:
-      - name: itemType
-        in: query
-        schema: { type: string, enum: [restaurant, food, all], default: all }
       - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
       - $ref: '../components/common.yaml#/components/parameters/LimitQuery'
     responses:
@@ -78,8 +75,8 @@ x-operations:
   AddSavedItem:
     tags: [Customer · Social]
     operationId: addSavedItem
-    summary: Save a restaurant or dish.
-    description: 'Idempotent on `(itemType, restaurantId|foodId)`.'
+    summary: Save a restaurant.
+    description: 'Idempotent on `restaurantId`.'
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:
@@ -87,18 +84,10 @@ x-operations:
       content:
         application/json:
           schema:
-            oneOf:
-              - type: object
-                required: [itemType, restaurantId]
-                properties:
-                  itemType:     { const: restaurant }
-                  restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
-              - type: object
-                required: [itemType, restaurantId, foodId]
-                properties:
-                  itemType:     { const: food }
-                  restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
-                  foodId:       { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+            type: object
+            required: [restaurantId]
+            properties:
+              restaurantId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
     responses:
       '201':
         description: Saved (or returned existing if idempotent).
@@ -107,7 +96,7 @@ x-operations:
             schema: { $ref: '../components/schemas.yaml#/components/schemas/SavedItem' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '404':
-        description: Restaurant or food not found.
+        description: Restaurant not found.
         content:
           application/problem+json:
             schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }

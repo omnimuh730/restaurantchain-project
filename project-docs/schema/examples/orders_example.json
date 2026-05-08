@@ -5,6 +5,7 @@
     "floorId":      { "$oid": "65f0000000000000000f0001" },
     "tableId":      { "$oid": "65f0000000000000000d0001" },
     "reservationId":{ "$oid": "65f0000000000000000e0001" },
+    "reviewId": null,
     "openedBy": { "$oid": "65f0000000000000000a0001" },
     "openedAt": { "$date": "2026-04-25T11:01:00.000Z" },
     "closedAt": null,

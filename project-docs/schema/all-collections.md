@@ -5,7 +5,7 @@ Single-file reference for every MongoDB collection in the system. For per-domain
 
 | #   | Collection              | Purpose                                                                                                                                              | Detail                                   |
 | --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | `customer_users`        | End users of the reservation app; **`ownedWalletIds` / `ownedCardIds` / `linkedCardIds`** (pointers to `cards`); optional balance/rewards cache; social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
+| 1   | `customer_users`        | End users; **`ownedWalletId`** (single wallet) **`ownedCardIds` / `linkedCardIds`**; optional PSP **`paymentMethods`**; saved **restaurants** only; no profile phone; optional cache; social, daily-bonus, referral, subscription. | `[users.md](./users.md)`                 |
 | 2   | `staff_users`           | POS users tied to a single restaurant.                                                                                                               | `[users.md](./users.md)`                 |
 | 3   | `restaurants`           | Tenant root; embeds settings, floors, simplified menu, deposit cards, pending-staff inbox; **`reviewCount` + `averageRating` denormalized from reviews.** | `[restaurants.md](./restaurants.md)`     |
 | 4   | `tables`                | Per-floor operational state with QR; separate from `restaurants` to avoid contention.                                                                | `[tables.md](./tables.md)`               |
@@ -18,7 +18,7 @@ Single-file reference for every MongoDB collection in the system. For per-domain
 | 11  | `support_conversations` | Support thread; embeds messages.                                                                                                                     | `[support.md](./support.md)`             |
 | 12  | `metadata`              | One doc per static catalog (security questions, plans, tiers, amenities, articles, ...).                                                             | `[metadata.md](./metadata.md)`           |
 | 13  | `reviews`               | Customer-authored restaurant reviews; optional stars per dimension + optional comment; optional `reservationId`.                                       | `[reviews.md](./reviews.md)`             |
-| 14  | `cards`                 | Unified stored-value surface: **`type`** `wallet` or `card`; balances on row; wallet rows use **`pool`**; card rows use **`cardNumber` / `passCode`**. | `[cards.md](./cards.md)`                 |
+| 14  | `cards`                 | **`type`** `wallet` (one per user) or `card`; **`balanceKrw` + `balanceUsd`** on every row; cards add **`cardNumber` / `passCode`**. | `[cards.md](./cards.md)`                 |
 
 
 Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
@@ -44,7 +44,6 @@ type CustomerUser = {
   username: string;
   passwordHash: string;
   fullName: string;
-  phone?: string;
   avatarImg?: string;               // base64 image data
 
   status: "active" | "deactivated" | "deleted";
@@ -54,11 +53,8 @@ type CustomerUser = {
     answerHash: string;
   }>;
 
-  /**
-   * -> `cards._id` where `type === "wallet"` (typically three rows: domestic, foreign, bonus).
-   * Authoritative balances live on those `cards` documents, not here.
-   */
-  ownedWalletIds: ObjectId[];
+  /** -> `cards._id` where `type === "wallet"` (exactly one per user). */
+  ownedWalletId: ObjectId;
 
   /** -> `cards._id` where `type === "card"`. */
   ownedCardIds: ObjectId[];
@@ -73,7 +69,7 @@ type CustomerUser = {
     pointsToNextTier?: number;
   };
 
-  paymentMethods: Array<{
+  paymentMethods?: Array<{
     _id: ObjectId;
     pspProvider: string;
     pspExternalId: string;
@@ -88,9 +84,7 @@ type CustomerUser = {
 
   savedItems: Array<{
     _id: ObjectId;
-    itemType: "restaurant" | "food";
-    restaurantId?: ObjectId;
-    foodId?: ObjectId;
+    restaurantId: ObjectId;
     savedAt: Date;
   }>;
 
@@ -138,7 +132,7 @@ type CustomerUser = {
 };
 ```
 
-Indexes: `{username:1}`u, `{phone:1}`us, `{"referral.code":1}`u, `{status:1, createdAt:-1}`, `{"savedItems.restaurantId":1}`mk, `{"friends.friendId":1, "friends.status":1}`mk.
+Indexes: `{username:1}`u, `{"referral.code":1}`u, `{status:1, createdAt:-1}`, `{"savedItems.restaurantId":1}`mk, `{"friends.friendId":1, "friends.status":1}`mk.
 
 ---
 
@@ -341,6 +335,7 @@ type Order = {
   floorId: ObjectId;
   tableId: ObjectId;
   reservationId?: ObjectId | null;
+  reviewId?: ObjectId | null;       // -> reviews (post-order review)
   openedBy: ObjectId; openedAt: Date; closedAt?: Date | null;
   partySize?: number;
   guestUserIds: ObjectId[];
@@ -360,7 +355,7 @@ type Order = {
     finalizedAt?: Date; finalizedBy?: ObjectId;
   };
   status: "open" | "bill_requested" | "bill" | "paid" | "voided";
-  paymentIds: ObjectId[];
+  paymentIds: ObjectId[];           // -> payment_transactions
   items: Array<{
     _id: ObjectId;
     menuItemId: ObjectId;
@@ -381,7 +376,7 @@ type Order = {
 };
 ```
 
-Indexes: `{restaurantId:1, status:1, openedAt:-1}`, `{tableId:1, status:1}`, `{reservationId:1}`us, `{restaurantId:1, "bill.finalizedAt":-1}`, `{"items.sendBatchId":1}`mk, `{restaurantId:1, "items.snapshot.name":1}`mk, `{"items.chefStatus":1}`mk.
+Indexes: `{restaurantId:1, status:1, openedAt:-1}`, `{tableId:1, status:1}`, `{reservationId:1}`us, `{reviewId:1}`s, `{restaurantId:1, "bill.finalizedAt":-1}`, `{"items.sendBatchId":1}`mk, `{restaurantId:1, "items.snapshot.name":1}`mk, `{"items.chefStatus":1}`mk.
 
 ---
 
@@ -613,6 +608,7 @@ type Review = {
   userId: ObjectId;
   restaurantId: ObjectId;
   reservationId?: ObjectId | null;
+  orderId?: ObjectId | null;
   /** `null` = top-level review; otherwise `reviews._id` of parent (sub-thread / reply). */
   parentId?: ObjectId | null;
   rating?: ReviewRating | null;
@@ -622,7 +618,7 @@ type Review = {
 };
 ```
 
-Indexes: `{restaurantId:1, createdAt:-1}`, `{parentId:1, createdAt:-1}` sparse, `{restaurantId:1, parentId:1, createdAt:-1}`, `{userId:1, createdAt:-1}`, `{userId:1, reservationId:1}` unique sparse.
+Indexes: `{restaurantId:1, createdAt:-1}`, `{parentId:1, createdAt:-1}` sparse, `{restaurantId:1, parentId:1, createdAt:-1}`, `{userId:1, createdAt:-1}`, `{userId:1, reservationId:1}` unique sparse, `{userId:1, orderId:1}` unique sparse.
 
 ---
 
@@ -641,7 +637,6 @@ type CardsRowBase = {
 
 type WalletRow = CardsRowBase & {
   type: "wallet";
-  pool: "domestic" | "foreign" | "bonus";
 };
 
 type CardRow = CardsRowBase & {
@@ -653,7 +648,7 @@ type CardRow = CardsRowBase & {
 type CardsDocument = WalletRow | CardRow;
 ```
 
-Indexes: `{ ownerUserId: 1, type: 1, pool: 1 }` unique partial (`type: "wallet"` only); `{ cardNumber: 1 }` unique partial (`type: "card"` only); `{ ownerUserId: 1, type: 1, createdAt: -1 }`.
+Indexes: `{ ownerUserId: 1, type: 1 }` unique partial (`type: "wallet"` only — one wallet per user); `{ cardNumber: 1 }` unique partial (`type: "card"` only); `{ ownerUserId: 1, type: 1, createdAt: -1 }`.
 
 ---
 

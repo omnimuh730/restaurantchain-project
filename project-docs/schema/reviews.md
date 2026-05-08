@@ -13,7 +13,7 @@ Source READMEs:
 
 | Collection | Purpose |
 | ---------- | ------- |
-| `reviews`  | One row per customer review (or **reply** in a sub-thread); optional `parentId` (default top-level); optional tie to `reservations._id`. |
+| `reviews`  | One row per customer review (or **reply** in a sub-thread); optional `parentId` (default top-level); optional `reservationId` and/or **`orderId`**. |
 
 ---
 
@@ -36,6 +36,9 @@ type Review = {
 
   /** Present when the review is tied to a visit; enables idempotent upsert per visit. */
   reservationId?: ObjectId | null; // -> reservations
+
+  /** Present when the review is tied to a completed POS order (dining bill). */
+  orderId?: ObjectId | null; // -> orders
 
   /**
    * Top-level review: `null` (default). Reply / sub-thread: `reviews._id` of the parent review.
@@ -62,6 +65,7 @@ type Review = {
 - A write must carry **at least one** of: a non-empty `comment` (after trim), or a `rating` object with **at least one** numeric field set. Pure empty reviews are rejected (the user simply skips the flow).
 - Star values, when present, are integers **1–5** (or half-star if the product allows; default docs assume integer stars).
 - When `reservationId` is set, the server checks: reservation `userId` matches author, reservation `restaurantId` matches, and status is appropriate for review (e.g. `visited`). **At most one** review per `(userId, reservationId)` — upsert on repeat submit (typically for **top-level** rows only, i.e. `parentId == null`).
+- When `orderId` is set, the server checks: the author is a diner on that order (`orders.guestUserIds` or policy), `orders.restaurantId` matches, and order status allows review (e.g. `paid`). **At most one** review per `(userId, orderId)`; set `orders.reviewId` to this review’s `_id` in the same transaction.
 - When `parentId` is set, validate parent exists, `parent.restaurantId === restaurantId`, and enforce max thread depth if required.
 
 ### Indexes
@@ -71,6 +75,7 @@ type Review = {
 - `{ restaurantId: 1, parentId: 1, createdAt: -1 }` — venue feed grouped by thread.
 - `{ userId: 1, createdAt: -1 }` — "my reviews".
 - `{ userId: 1, reservationId: 1 }` **unique sparse** — one review per reservation when `reservationId` is present.
+- `{ userId: 1, orderId: 1 }` **unique sparse** — one review per order when `orderId` is present.
 - `{ restaurantId: 1, userId: 1 }` — optional guard if the product allows only one review per user per restaurant **lifetime** (policy choice; if not required, skip this index).
 
 ### Restaurant aggregates

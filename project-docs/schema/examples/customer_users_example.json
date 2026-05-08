@@ -4,7 +4,6 @@
     "username": "sarah",
     "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$ZHVtbXkxc2FsdA$rTfQH6Yc8a0o9EeUQs8E5bYmKyjLm0GxnH9X1hPwXFE",
     "fullName": "Sarah Kim",
-    "phone": "+8210123456789",
     "avatarImg": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD-example",
     "status": "active",
     "securityAnswers": [
@@ -12,11 +11,7 @@
       { "questionId": "mother_maiden",  "answerHash": "sha256:7a92b04c5d6e..." },
       { "questionId": "favorite_movie", "answerHash": "sha256:9b81e02a4c1f..." }
     ],
-    "ownedWalletIds": [
-      { "$oid": "65f0000000000000000c2001" },
-      { "$oid": "65f0000000000000000c2002" },
-      { "$oid": "65f0000000000000000c2003" }
-    ],
+    "ownedWalletId": { "$oid": "65f0000000000000000c2001" },
     "ownedCardIds": [{ "$oid": "65f0000000000000000c2101" }],
     "linkedCardIds": [],
     "rewards": {
@@ -25,53 +20,11 @@
       "nextTier": "platinum",
       "pointsToNextTier": 180
     },
-    "paymentMethods": [
-      {
-        "_id": { "$oid": "65f0000000000000000c1101" },
-        "pspProvider": "toss",
-        "pspExternalId": "pm_t_8FQz2vN0xQ8M0",
-        "kind": "card",
-        "card": { "brand": "Visa", "last4": "4242", "expMonth": 12, "expYear": 2028 },
-        "isDefault": true,
-        "fundsForeign": false,
-        "fundsDomestic": true,
-        "addedAt": { "$date": "2025-09-01T03:00:00.000Z" }
-      },
-      {
-        "_id": { "$oid": "65f0000000000000000c1102" },
-        "pspProvider": "stripe",
-        "pspExternalId": "pm_1OjyUuLkdIw...",
-        "kind": "card",
-        "card": { "brand": "Mastercard", "last4": "5454", "expMonth": 6, "expYear": 2027 },
-        "isDefault": false,
-        "fundsForeign": true,
-        "fundsDomestic": false,
-        "addedAt": { "$date": "2025-11-15T07:22:11.000Z" }
-      },
-      {
-        "_id": { "$oid": "65f0000000000000000c1103" },
-        "pspProvider": "stripe",
-        "pspExternalId": "pm_apple_pay_xyz",
-        "kind": "apple_pay",
-        "isDefault": false,
-        "fundsForeign": true,
-        "fundsDomestic": false,
-        "addedAt": { "$date": "2026-02-08T14:00:00.000Z" }
-      }
-    ],
     "savedItems": [
       {
         "_id": { "$oid": "65f0000000000000000c1301" },
-        "itemType": "restaurant",
         "restaurantId": { "$oid": "65f0000000000000000b0001" },
         "savedAt": { "$date": "2026-03-10T11:00:00.000Z" }
-      },
-      {
-        "_id": { "$oid": "65f0000000000000000c1302" },
-        "itemType": "food",
-        "restaurantId": { "$oid": "65f0000000000000000b0001" },
-        "foodId": { "$oid": "65f0000000000000000b2002" },
-        "savedAt": { "$date": "2026-03-22T19:01:55.000Z" }
       }
     ],
     "friends": [
@@ -132,21 +85,15 @@
     "username": "mike",
     "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$bWlrZXNhbHQ$Hx2X...",
     "fullName": "Mike Lee",
-    "phone": "+8210444555666",
     "status": "active",
     "securityAnswers": [
       { "questionId": "first_school", "answerHash": "sha256:abc..." },
       { "questionId": "first_pet",    "answerHash": "sha256:def..." }
     ],
-    "ownedWalletIds": [
-      { "$oid": "65f0000000000000000c2004" },
-      { "$oid": "65f0000000000000000c2005" },
-      { "$oid": "65f0000000000000000c2006" }
-    ],
+    "ownedWalletId": { "$oid": "65f0000000000000000c2002" },
     "ownedCardIds": [],
     "linkedCardIds": [],
     "rewards": { "tier": "silver", "points": 40, "nextTier": "gold", "pointsToNextTier": 60 },
-    "paymentMethods": [],
     "savedItems": [],
     "friends": [
       {

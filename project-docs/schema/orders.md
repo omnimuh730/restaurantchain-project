@@ -28,6 +28,9 @@ type Order = {
   tableId: ObjectId;                // -> tables
   reservationId?: ObjectId | null;  // present when opened from a reservation
 
+  /** When the guest submits a post-order review, points at `reviews._id` for that order. */
+  reviewId?: ObjectId | null;
+
   openedBy: ObjectId;               // staff_users
   openedAt: Date;
   closedAt?: Date | null;
@@ -62,7 +65,7 @@ type Order = {
     | "paid"             // fully paid
     | "voided";          // cancelled before payment
 
-  paymentIds: ObjectId[];           // -> payments (mix payment may produce 2 rows)
+  paymentIds: ObjectId[];           // -> payment_transactions (split tender may produce multiple rows)
 
   // ---- Embedded: Items ----
   items: Array<{
@@ -120,6 +123,7 @@ type Order = {
 - `{ restaurantId: 1, status: 1, openedAt: -1 }`
 - `{ tableId: 1, status: 1 }`
 - `{ reservationId: 1 }` unique sparse
+- `{ reviewId: 1 }` sparse — at most one review pointer per order when set
 - `{ restaurantId: 1, "bill.finalizedAt": -1 }`
 - `{ "items.sendBatchId": 1 }` (multikey, kitchen view)
 - `{ restaurantId: 1, "items.snapshot.name": 1 }` (multikey, Menu Analysis)
@@ -163,5 +167,6 @@ ready ─recall─▶ in_progress
 - **Recall** flips `ready` → `in_progress` for that one item.
 - `orders.totals.{domestic,foreign}` is recomputed on every item change. Drafts are excluded.
 - An order can be opened with or without a reservation. From reservation QR check-in, `reservationId` is set and the matching `tables.occupancy.orderId` is set in the same transaction.
-- Voiding the order leaves all items in `voided`. Refunds go through the `payments` row, never by mutating order data.
+- Voiding the order leaves all items in `voided`. Refunds go through **`payment_transactions`**, never by mutating order data.
+- **`reviewId`**: set when a customer completes an order-level review; must match a `reviews` row (typically with `reviews.orderId` set for the same order — see `[reviews.md](./reviews.md)`).
 - The customer's "Live Bill" view aggregates `orders.items[]` filtered to `chefStatus != "draft"`.

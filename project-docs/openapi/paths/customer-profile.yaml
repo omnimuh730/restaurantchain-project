@@ -68,7 +68,6 @@ x-operations:
             additionalProperties: false
             properties:
               fullName:    { type: string, minLength: 1, maxLength: 80 }
-              phone:       { type: [string, 'null'] }
               avatarImg:   { type: [string, 'null'], description: 'Base64 image data URI (e.g. data:image/png;base64,...)' }
     responses:
       '200':
@@ -77,11 +76,6 @@ x-operations:
           application/json:
             schema: { $ref: '../components/schemas.yaml#/components/schemas/CustomerUser' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
-      '409':
-        description: Phone collision.
-        content:
-          application/problem+json:
-            schema: { $ref: '../components/common.yaml#/components/schemas/Problem' }
       '422': { $ref: '../components/common.yaml#/components/responses/UnprocessableEntity' }
 
   PutPreferences:

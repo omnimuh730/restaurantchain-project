@@ -975,10 +975,6 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 80
-                phone:
-                  type:
-                    - string
-                    - 'null'
                 avatarImg:
                   type:
                     - string
@@ -993,12 +989,6 @@ paths:
                 $ref: '#/components/schemas/CustomerUser'
         '401':
           $ref: '#/components/responses/Unauthenticated'
-        '409':
-          description: Phone collision.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
   /me/preferences:
@@ -1393,17 +1383,8 @@ paths:
       tags:
         - Customer · Social
       operationId: listSavedItems
-      summary: List saved restaurants and dishes.
+      summary: List saved restaurants.
       parameters:
-        - name: itemType
-          in: query
-          schema:
-            type: string
-            enum:
-              - restaurant
-              - food
-              - all
-            default: all
         - $ref: '#/components/parameters/CursorQuery'
         - $ref: '#/components/parameters/LimitQuery'
       responses:
@@ -1426,8 +1407,8 @@ paths:
       tags:
         - Customer · Social
       operationId: addSavedItem
-      summary: Save a restaurant or dish.
-      description: Idempotent on `(itemType, restaurantId|foodId)`.
+      summary: Save a restaurant.
+      description: Idempotent on `restaurantId`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -1435,28 +1416,12 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - type: object
-                  required:
-                    - itemType
-                    - restaurantId
-                  properties:
-                    itemType:
-                      const: restaurant
-                    restaurantId:
-                      $ref: '#/components/schemas/ObjectId'
-                - type: object
-                  required:
-                    - itemType
-                    - restaurantId
-                    - foodId
-                  properties:
-                    itemType:
-                      const: food
-                    restaurantId:
-                      $ref: '#/components/schemas/ObjectId'
-                    foodId:
-                      $ref: '#/components/schemas/ObjectId'
+              type: object
+              required:
+                - restaurantId
+              properties:
+                restaurantId:
+                  $ref: '#/components/schemas/ObjectId'
       responses:
         '201':
           description: Saved (or returned existing if idempotent).
@@ -1467,7 +1432,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
-          description: Restaurant or food not found.
+          description: Restaurant not found.
           content:
             application/problem+json:
               schema:
@@ -2009,18 +1974,18 @@ paths:
       tags:
         - Customer · Wallets
       operationId: getWallets
-      summary: Read wallet pool balances (`cards` rows for `ownedWalletIds`).
+      summary: Read main wallet balances (`customer_users.ownedWalletId` → `cards` `type=wallet`).
       description: |
-        Returns the three logical pools by resolving `customer_users.ownedWalletIds` to `cards` documents
-        (`type=wallet`). Optional denormalized `customer_users.wallets` may be used as a cache only;
-        source of truth is `cards` balances updated atomically with `wallet_transactions`.
+        Returns **`balanceKrw`** and **`balanceUsd`** from the customer’s single wallet row.
+        Optional denormalized `customer_users.wallets` may mirror the same two fields;
+        source of truth is the `cards` document updated atomically with `wallet_transactions`.
       responses:
         '200':
-          description: Wallets cache.
+          description: Wallet balances.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserWallets'
+                $ref: '#/components/schemas/UserWalletBalances'
         '401':
           $ref: '#/components/responses/Unauthenticated'
   /me/wallets/transactions:
@@ -8153,49 +8118,19 @@ components:
       type: string
       pattern: ^[0-9a-fA-F]{24}$
       example: 65f0000000000000000c0001
-    UserWallets:
+    UserWalletBalances:
+      description: Mirrors the customer’s single wallet `cards` row — both currencies on one account.
       type: object
       required:
-        - domestic
-        - foreign
-        - bonus
+        - balanceKrw
+        - balanceUsd
       properties:
-        domestic:
-          type: object
-          required:
-            - currency
-            - amount
-          properties:
-            currency:
-              type: string
-              example: KRW
-            amount:
-              type: string
-              description: Decimal amount as string (Decimal128).
-        foreign:
-          type: object
-          required:
-            - currency
-            - amount
-          properties:
-            currency:
-              type: string
-              example: USD
-            amount:
-              type: string
-              description: Decimal amount as string (Decimal128).
-        bonus:
-          type: object
-          required:
-            - currency
-            - amount
-          properties:
-            currency:
-              type: string
-              example: USD
-            amount:
-              type: string
-              description: Decimal amount as string (Decimal128).
+        balanceKrw:
+          type: string
+          description: KRW balance as string (Decimal128).
+        balanceUsd:
+          type: string
+          description: USD balance as string (Decimal128).
     UserRewards:
       type: object
       required:
@@ -8287,19 +8222,12 @@ components:
       type: object
       required:
         - id
-        - itemType
+        - restaurantId
         - savedAt
       properties:
         id:
           $ref: '#/components/schemas/ObjectId'
-        itemType:
-          type: string
-          enum:
-            - restaurant
-            - food
         restaurantId:
-          $ref: '#/components/schemas/ObjectId'
-        foodId:
           $ref: '#/components/schemas/ObjectId'
         savedAt:
           type: string
@@ -8437,7 +8365,7 @@ components:
         - username
         - fullName
         - status
-        - ownedWalletIds
+        - ownedWalletId
         - rewards
         - referral
         - dailyBonus
@@ -8451,11 +8379,6 @@ components:
         fullName:
           type: string
           example: Sarah Kim
-        phone:
-          type:
-            - string
-            - 'null'
-          example: '+8210123456789'
         avatarImg:
           type:
             - string
@@ -8467,23 +8390,24 @@ components:
             - active
             - deactivated
             - deleted
-        ownedWalletIds:
-          type: array
-          description: ObjectIds of `cards` rows with `type=wallet` (typically domestic, foreign, bonus).
-          items:
-            $ref: '#/components/schemas/ObjectId'
+        ownedWalletId:
+          allOf:
+            - $ref: '#/components/schemas/ObjectId'
+          description: Single `cards` row with `type=wallet` (provisioned with the account).
         wallets:
           allOf:
-            - $ref: '#/components/schemas/UserWallets'
-          description: Optional denormalized balances for fast reads; source of truth is `cards` + `wallet_transactions`.
+            - $ref: '#/components/schemas/UserWalletBalances'
+          description: Optional denormalized copy of `balanceKrw` / `balanceUsd` for fast reads; source of truth is the `cards` wallet row + `wallet_transactions`.
         rewards:
           $ref: '#/components/schemas/UserRewards'
         paymentMethods:
           type: array
+          description: Optional — user may have no PSP methods on file.
           items:
             $ref: '#/components/schemas/PaymentMethod'
         savedItems:
           type: array
+          description: Saved restaurants only.
           items:
             $ref: '#/components/schemas/SavedItem'
         friends:
@@ -9094,13 +9018,6 @@ components:
             - card
         ownerUserId:
           $ref: '#/components/schemas/ObjectId'
-        pool:
-          type: string
-          enum:
-            - domestic
-            - foreign
-            - bonus
-          description: Wallet rows only (`type=wallet`).
         cardNumber:
           type: string
           description: Card rows only (`type=card`); full or masked per product policy.
@@ -9165,6 +9082,11 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ObjectId'
             - type: 'null'
+        orderId:
+          description: When the review is for a completed POS order.
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
         rating:
           oneOf:
             - $ref: '#/components/schemas/ReviewRatingPartial'
@@ -9195,6 +9117,8 @@ components:
             - $ref: '#/components/schemas/ObjectId'
             - type: 'null'
         reservationId:
+          $ref: '#/components/schemas/ObjectId'
+        orderId:
           $ref: '#/components/schemas/ObjectId'
         rating:
           oneOf:
@@ -10945,6 +10869,11 @@ components:
           $ref: '#/components/schemas/ObjectId'
         reservationId:
           $ref: '#/components/schemas/ObjectId'
+        reviewId:
+          description: Set when a diner posts an order-level review; -> `reviews`.
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: 'null'
         openedBy:
           $ref: '#/components/schemas/ObjectId'
         openedAt:

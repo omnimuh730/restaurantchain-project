@@ -112,7 +112,7 @@ type RewardEntry = {
 - **Daily bonus**:
   - The claim endpoint is idempotent per `(userId, localDate)` enforced by a unique partial index on `customer_users.dailyBonus.history.localDate` — repeated claims read the existing row.
   - If the chosen box rewards points, insert a `rewards` row of `type: "daily_bonus"` and store its `_id` in `dailyBonus.history[].pointsLedgerId` (field name may be aliased to `rewardsEntryId` in API).
-  - If the box rewards wallet credit, insert a **`wallet_transactions`** row targeting the user's `cards` wallet row and store its `_id` in `dailyBonus.history[].walletTransactionId`.
+  - If the box rewards wallet credit, insert a **`wallet_transactions`** row targeting the user's single **`cards`** row with `type: "wallet"` and store its `_id` in `dailyBonus.history[].walletTransactionId`.
 - **Referral**:
   - At sign-up, the referee writes `referral.referredByCode` and an entry is appended to the referrer's `referral.redemptions[]`.
   - Each side is rewarded with either points (a `rewards` row) or **`cards`** credit via **`wallet_transactions`** as configured in `metadata.reward_tiers` / referral config.

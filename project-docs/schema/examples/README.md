@@ -46,9 +46,8 @@ The same IDs are used across files so the documents cross-reference into a coher
 | Payment (deposit)    | `65f0000000000000000e0010` |
 | Payment (order bill) | `65f0000000000000000e0011` |
 | Wallet top-up tx     | `65f0000000000000000a2001` |
-| Sarah domestic pool  | `65f0000000000000000c2001` |
-| Sarah foreign pool   | `65f0000000000000000c2002` |
-| Sarah bonus pool     | `65f0000000000000000c2003` |
+| Sarah wallet (`cards`) | `65f0000000000000000c2001` |
+| Mike wallet (`cards`)  | `65f0000000000000000c2002` |
 | Rewards entry        | `65f0000000000000000a3001` |
 | Notification         | `65f0000000000000000a4001` |
 | Support conv         | `65f0000000000000000a6001` |

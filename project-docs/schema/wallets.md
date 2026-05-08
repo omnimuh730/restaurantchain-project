@@ -2,9 +2,8 @@
 
 **Single append-only ledger** for every internal movement that touches **`cards`** balances:
 
-- **Wallet ↔ wallet** (e.g. domestic → foreign only if product allows; usually gifts are same-pool).
-- **Card ↔ card**.
-- **Wallet ↔ card** — top-up from PSP into wallet, load from wallet onto card, withdraw from card to main wallet, close card and refund to wallet, etc.
+- **Customer wallet ↔ customer wallet** — e.g. P2P gift between users’ main `type: "wallet"` rows (each user has one wallet).
+- **Card ↔ card** and **wallet ↔ card** — top-up from PSP into wallet, load from wallet onto card, withdraw from card to main wallet, close card and refund to wallet, etc.
 - **Top-up / withdraw / gift / daily bonus / subscription charge** when the effect is on `cards` rows (not the PSP capture itself — that is `payment_transactions`).
 
 **Not in this collection:** PSP payment capture rows → **`payment_transactions`**. Points-only events → **`rewards`**.

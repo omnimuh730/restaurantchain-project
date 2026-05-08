@@ -11,20 +11,20 @@ This schema follows a **simplified 14-collection design**: aggressive embedding 
 
 | # | Collection | File | Notes |
 |---|---|---|---|
-| 1 | `customer_users` | [`users.md`](./users.md) | **`ownedWalletIds` / `ownedCardIds` / `linkedCardIds`** (refs to `cards`); optional balance/rewards cache; saved items, friends, payment methods, daily-bonus history, and customer Pro subscription summary. |
+| 1 | `customer_users` | [`users.md`](./users.md) | **`ownedWalletId`** (one wallet) **`ownedCardIds` / `linkedCardIds`**; optional **`paymentMethods`**; saved **restaurants** only; no profile phone; optional cache; friends, daily-bonus, referral, Pro subscription. |
 | 2 | `staff_users` | [`users.md`](./users.md) | POS staff identities and permissions. |
 | 3 | `restaurants` | [`restaurants.md`](./restaurants.md) | Embeds settings, floors, simplified menu items, primary/secondary phones, deposit cards; **`reviewCount` + `averageRating`** denormalized from `reviews`. |
 | 4 | `tables` | [`tables.md`](./tables.md) | Separate — operational realtime state. |
 | 5 | `reservations` | [`reservations.md`](./reservations.md) | Bridge between users and restaurants; embeds invites and timeline. |
-| 6 | `orders` | [`orders.md`](./orders.md) | Embeds `order_items[]`; chef batches expressed via `sendBatchId` field. |
+| 6 | `orders` | [`orders.md`](./orders.md) | Embeds `order_items[]`; chef batches via `sendBatchId`; optional **`reviewId`** → `reviews`. |
 | 7 | `payment_transactions` | [`payments.md`](./payments.md) | Append-only PSP / cash / checkout; embeds `refunds[]` and method/intent metadata. |
 | 8 | `wallet_transactions` | [`wallets.md`](./wallets.md) | Append-only ledger for all internal `cards` movements (wallets, cards, cross-loads). |
 | 9 | `rewards` | [`rewards.md`](./rewards.md) | Append-only points ledger; tier/points cache may live on user. |
 | 10 | `notifications` | [`notifications.md`](./notifications.md) | High-write fan-out; push tokens live on user devices. |
 | 11 | `support_conversations` | [`support.md`](./support.md) | Embeds `messages[]`. |
 | 12 | `metadata` | [`metadata.md`](./metadata.md) | Read-mostly catalogs (security questions, plans, tiers, amenities, preferences, support articles) as one doc per catalog. |
-| 13 | `reviews` | [`reviews.md`](./reviews.md) | Restaurant reviews; optional per-dimension stars and optional comment; optional `reservationId`. |
-| 14 | `cards` | [`cards.md`](./cards.md) | Unified collection: `type` wallet or card; balances on row; wallet uses `pool`; card uses `cardNumber` / `passCode`. |
+| 13 | `reviews` | [`reviews.md`](./reviews.md) | Restaurant reviews; optional stars/comment; optional `reservationId` or **`orderId`**. |
+| 14 | `cards` | [`cards.md`](./cards.md) | One **`type: "wallet"`** per user + **`type: "card"`** rows; **`balanceKrw` + `balanceUsd`** on all; cards add `cardNumber` / `passCode`. |
 
 Plus auxiliary auth-infra collections (TTL'd, isolated): `sessions`, `password_reset_sessions`. Documented in `users.md`.
 
@@ -45,10 +45,10 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 | `restaurant_phones` | `restaurants.primaryPhone`, `restaurants.secondaryPhone` |
 | `restaurant_payment_cards` / `restaurant_deposit_cards` | `restaurants.depositCards[]` |
 | `staff_join_requests` | `restaurants.pendingStaff[]` |
-| `wallets` (as separate collection) | Replaced by **`cards`** rows with `type: "wallet"` + `customer_users.ownedWalletIds` |
-| `customer_payment_methods` | `customer_users.paymentMethods[]` |
+| `wallets` (as separate collection) | Replaced by **one** **`cards`** row (`type: "wallet"`) per user + `customer_users.ownedWalletId` |
+| `customer_payment_methods` | Optional `customer_users.paymentMethods[]` |
 | `friend_requests`, `friends` | `customer_users.friends[]` |
-| `saved_items` | `customer_users.savedItems[]` |
+| `saved_items` | `customer_users.savedItems[]` (restaurant ids only) |
 | `daily_bonus_claims` | `customer_users.dailyBonus.history[]` (capped, archive older) |
 | `referral_codes`, `referral_redemptions` | `customer_users.referral` |
 | `reward_tiers` | `metadata` doc `_id: "reward_tiers"` |
@@ -70,7 +70,7 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 |---|---|
 | `tables` | Operational realtime state changed concurrently by multiple staff; separate to avoid contention on the restaurant doc. |
 | `wallet_transactions` | Append-only ledger for every internal `cards` balance change; unbounded growth; financial audit. |
-| `cards` | Wallet + stored-value card rows; kept separate from `customer_users` so the user doc only holds `ownedWalletIds` / `ownedCardIds` / `linkedCardIds`. |
+| `cards` | One wallet row + card rows per customer; user doc holds `ownedWalletId` / `ownedCardIds` / `linkedCardIds`. |
 | `reviews` | Unbounded user-generated content; public listings and moderation; drives denormalized aggregates on `restaurants`. |
 | `rewards` | Append-only loyalty ledger; required to explain tier and reverse fraud. |
 | `notifications` | Highest write rate per recipient; unbounded growth; mark-read/delete-all are per-row mutations. |

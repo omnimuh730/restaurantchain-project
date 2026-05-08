@@ -11,7 +11,7 @@ erDiagram
     customer_users ||--o{ notifications : "receives"
     customer_users ||--o{ support_conversations : "opens"
     customer_users ||--o{ reviews : "writes"
-    customer_users }o--o{ cards : "ownedWalletIds ownedCardIds linkedCardIds"
+    customer_users }o--o{ cards : "ownedWalletId ownedCardIds linkedCardIds"
 
     cards ||--o{ wallet_transactions : "from to legs"
 
@@ -27,6 +27,7 @@ erDiagram
     reservations ||--o| reviews : "may reference"
 
     orders ||--o{ payment_transactions : "settles"
+    orders ||--o| reviews : "reviewId"
 
     subscriptions ||--o{ payment_transactions : "invoices"
     subscriptions ||--o{ wallet_transactions : "subscription_charge"
@@ -44,7 +45,7 @@ erDiagram
         string username
         string email
         string phone
-        array  ownedWalletIds
+        ObjectId ownedWalletId
         array  ownedCardIds
         array  linkedCardIds
         object rewards       "cache · tier+points"
@@ -84,6 +85,7 @@ erDiagram
         ObjectId restaurantId
         ObjectId tableId
         ObjectId reservationId
+        ObjectId reviewId
         string   status
         array    items          "with chefStatus per item"
         array    batches        "kitchen batches"
@@ -113,7 +115,6 @@ erDiagram
         ObjectId _id
         string   type
         ObjectId ownerUserId
-        string   pool
         string   cardNumber
         string   passCode
         decimal  balanceKrw

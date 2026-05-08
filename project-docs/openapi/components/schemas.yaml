@@ -20,30 +20,31 @@ components:
 
     CustomerUser:
       type: object
-      required: [id, username, fullName, status, ownedWalletIds, rewards, referral, dailyBonus, createdAt]
+      required: [id, username, fullName, status, ownedWalletId, rewards, referral, dailyBonus, createdAt]
       properties:
         id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
         username:           { type: string, example: sarah }
         fullName:           { type: string, example: Sarah Kim }
-        phone:              { type: [string, 'null'], example: '+8210123456789' }
         avatarImg:          { type: [string, 'null'], description: 'Base64 image data URI (e.g. data:image/png;base64,...)' }
         status:
           type: string
           enum: [active, deactivated, deleted]
-        ownedWalletIds:
-          type: array
-          description: ObjectIds of `cards` rows with `type=wallet` (typically domestic, foreign, bonus).
-          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        ownedWalletId:
+          allOf:
+            - $ref: './common.yaml#/components/schemas/ObjectId'
+          description: Single `cards` row with `type=wallet` (provisioned with the account).
         wallets:
           allOf:
-            - $ref: '#/components/schemas/UserWallets'
-          description: Optional denormalized balances for fast reads; source of truth is `cards` + `wallet_transactions`.
+            - $ref: '#/components/schemas/UserWalletBalances'
+          description: Optional denormalized copy of `balanceKrw` / `balanceUsd` for fast reads; source of truth is the `cards` wallet row + `wallet_transactions`.
         rewards:            { $ref: '#/components/schemas/UserRewards' }
         paymentMethods:
           type: array
+          description: Optional — user may have no PSP methods on file.
           items: { $ref: '#/components/schemas/PaymentMethod' }
         savedItems:
           type: array
+          description: Saved restaurants only.
           items: { $ref: '#/components/schemas/SavedItem' }
         friends:
           type: array
@@ -76,10 +77,6 @@ components:
         id: { $ref: './common.yaml#/components/schemas/ObjectId' }
         type: { type: string, enum: [wallet, card] }
         ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        pool:
-          type: string
-          enum: [domestic, foreign, bonus]
-          description: Wallet rows only (`type=wallet`).
         cardNumber:
           type: string
           description: Card rows only (`type=card`); full or masked per product policy.
@@ -90,28 +87,19 @@ components:
           enum: [owned, linked]
           description: For `type=card`, whether the caller holds this via `ownedCardIds` or `linkedCardIds`.
 
-    UserWallets:
+    UserWalletBalances:
+      description: Mirrors the customer’s single wallet `cards` row — both currencies on one account.
       type: object
-      required: [domestic, foreign, bonus]
+      required: [balanceKrw, balanceUsd]
       properties:
-        domestic:
-          type: object
-          required: [currency, amount]
-          properties:
-            currency: { type: string, example: KRW }
-            amount:   { type: string, description: 'Decimal amount as string (Decimal128).' }
-        foreign:
-          type: object
-          required: [currency, amount]
-          properties:
-            currency: { type: string, example: USD }
-            amount:   { type: string, description: 'Decimal amount as string (Decimal128).' }
-        bonus:
-          type: object
-          required: [currency, amount]
-          properties:
-            currency:  { type: string, example: USD }
-            amount:    { type: string, description: 'Decimal amount as string (Decimal128).' }
+        balanceKrw: { type: string, description: 'KRW balance as string (Decimal128).' }
+        balanceUsd: { type: string, description: 'USD balance as string (Decimal128).' }
+
+    UserWallets:
+      description: Deprecated; use `UserWalletBalances`.
+      deprecated: true
+      allOf:
+        - $ref: '#/components/schemas/UserWalletBalances'
 
     UserRewards:
       type: object
@@ -164,12 +152,10 @@ components:
 
     SavedItem:
       type: object
-      required: [id, itemType, savedAt]
+      required: [id, restaurantId, savedAt]
       properties:
         id:           { $ref: './common.yaml#/components/schemas/ObjectId' }
-        itemType:     { type: string, enum: [restaurant, food] }
         restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        foodId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
         savedAt:      { type: string, format: date-time }
 
     RecentSearch:
@@ -661,6 +647,11 @@ components:
           oneOf:
             - { $ref: './common.yaml#/components/schemas/ObjectId' }
             - { type: 'null' }
+        orderId:
+          description: When the review is for a completed POS order.
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
         rating:
           oneOf:
             - $ref: '#/components/schemas/ReviewRatingPartial'
@@ -683,6 +674,7 @@ components:
             - { $ref: './common.yaml#/components/schemas/ObjectId' }
             - { type: 'null' }
         reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
         rating:
           oneOf:
             - $ref: '#/components/schemas/ReviewRatingPartial'
@@ -777,6 +769,11 @@ components:
         floorId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
         tableId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
         reservationId:    { $ref: './common.yaml#/components/schemas/ObjectId' }
+        reviewId:
+          description: Set when a diner posts an order-level review; -> `reviews`.
+          oneOf:
+            - { $ref: './common.yaml#/components/schemas/ObjectId' }
+            - { type: 'null' }
         openedBy:         { $ref: './common.yaml#/components/schemas/ObjectId' }
         openedAt:         { type: string, format: date-time }
         closedAt:         { type: [string, 'null'], format: date-time }
