@@ -87,7 +87,7 @@ export function mountReservationRoutes(app, ctx) {
         return res.status(hit.status).json(hit.body);
       }
     }
-    const { restaurantId, paymentId } = req.body || {};
+    const { restaurantId, paymentId, orderId } = req.body || {};
     if (restaurantId !== store.RID) {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
@@ -117,6 +117,9 @@ export function mountReservationRoutes(app, ctx) {
       preferences: d?.preferences ?? { seating: [], cuisine: [], vibe: [], amenities: [] },
       deposit: { amount: '60000', currency: 'KRW' },
       paymentId,
+      orderId: orderId ?? null,
+      refundId: null,
+      tableId: null,
       status: 'requested',
       invites: [],
       timeline: [{ at: store.nowIso(), type: 'requested', actor: { kind: 'customer', id: uid } }],

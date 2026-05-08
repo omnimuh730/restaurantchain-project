@@ -1,5 +1,9 @@
 import { staffAuth, requireRestaurantScope, requirePermission } from '../middleware.js';
 
+function isItemRemoved(it) {
+  return it.deletedAt != null;
+}
+
 export function mountKitchenRoutes(app, ctx) {
   const { store } = ctx;
 
@@ -15,6 +19,7 @@ export function mountKitchenRoutes(app, ctx) {
         if (o.restaurantId !== rid) continue;
         const byBatch = new Map();
         for (const it of o.items || []) {
+          if (isItemRemoved(it)) continue;
           if (!it.sendBatchId || !['sent', 'in_progress', 'ready'].includes(it.chefStatus)) continue;
           if (!byBatch.has(it.sendBatchId)) {
             byBatch.set(it.sendBatchId, {
@@ -61,6 +66,7 @@ export function mountKitchenRoutes(app, ctx) {
       }
       const bid = req.params.batchId;
       for (const it of o.items) {
+        if (isItemRemoved(it)) continue;
         if (it.sendBatchId === bid && it.chefStatus === 'sent') {
           it.chefStatus = 'in_progress';
           it.acceptedAt = store.nowIso();
@@ -83,7 +89,7 @@ export function mountKitchenRoutes(app, ctx) {
         return;
       }
       const it = o.items.find((x) => x.id === req.params.itemId);
-      if (!it) {
+      if (!it || isItemRemoved(it)) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
       }
@@ -106,7 +112,7 @@ export function mountKitchenRoutes(app, ctx) {
         return;
       }
       const it = o.items.find((x) => x.id === req.params.itemId);
-      if (!it) {
+      if (!it || isItemRemoved(it)) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
       }

@@ -40,6 +40,8 @@ export function createPosStore() {
       },
       createdAt: nowIso(),
       updatedAt: nowIso(),
+      deletedAt: null,
+      deletedBy: null,
     },
   ]);
 

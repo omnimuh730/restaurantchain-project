@@ -1,3 +1,22 @@
+/** Calendar closure dates (YYYY-MM-DD) — align with `settings.general.nonOperatingDates` in project-docs. */
+const NON_OPERATING_DATES = ['2026-05-05', '2026-09-24', '2026-12-25'];
+
+function isActiveRow(row) {
+  return row == null || row.deletedAt == null;
+}
+
+/** Public/menu projection: omit soft-deleted floors, menu categories, subcategories, and items. */
+export function filterPublishedMenu(menu) {
+  if (!menu) return { categories: [], items: [] };
+  const categories = (menu.categories || []).filter(isActiveRow).map((c) => ({
+    ...c,
+    subcategories: (c.subcategories || []).filter(isActiveRow),
+  }));
+  const catIds = new Set(categories.map((c) => c.id));
+  const items = (menu.items || []).filter((i) => isActiveRow(i) && catIds.has(i.categoryId));
+  return { categories, items };
+}
+
 export function mountPublicRoutes(app, ctx) {
   const { store } = ctx;
   const { RID, FLOOR_MAIN } = store;
@@ -25,7 +44,7 @@ export function mountPublicRoutes(app, ctx) {
   }
 
   function fullRestaurant() {
-    return {
+    const doc = {
       ...restaurantCard(),
       description: '12-course omakase from chef Hiro.',
       imageUrls: ['https://cdn.catchtable.example/r/sakura/1.jpg'],
@@ -43,6 +62,7 @@ export function mountPublicRoutes(app, ctx) {
             { day: 1, open: '18:00', close: '23:00', closed: false },
             { day: 5, open: '18:00', close: '00:00', closed: false },
           ],
+          nonOperatingDates: [...NON_OPERATING_DATES],
         },
         security: {
           passwordPolicy: { minLength: 8, requireUppercase: true, requireNumber: true },
@@ -51,7 +71,17 @@ export function mountPublicRoutes(app, ctx) {
         features: { reservations: true, qrPay: true, delivery: false },
       },
       phones: [],
-      floors: [{ id: FLOOR_MAIN, name: 'Main', sortOrder: 0, isPublished: true }],
+      floors: [
+        { id: FLOOR_MAIN, name: 'Main', sortOrder: 0, isPublished: true, deletedAt: null, deletedBy: null },
+        {
+          id: '65f0000000000000000f0999',
+          name: 'Old wing',
+          sortOrder: 99,
+          isPublished: false,
+          deletedAt: '2026-01-01T00:00:00.000Z',
+          deletedBy: '65f0000000000000000s0001',
+        },
+      ],
       menu: {
         categories: [
           {
@@ -59,6 +89,8 @@ export function mountPublicRoutes(app, ctx) {
             name: 'Appetizers',
             sortOrder: 0,
             isActive: true,
+            deletedAt: null,
+            deletedBy: null,
             subcategories: [],
           },
         ],
@@ -72,6 +104,21 @@ export function mountPublicRoutes(app, ctx) {
             modifiers: [],
             availability: { isAvailable: true },
             isActive: true,
+            deletedAt: null,
+            deletedBy: null,
+            createdAt: store.nowIso(),
+          },
+          {
+            id: '65f0000000000000000b2099',
+            categoryId: '65f0000000000000000b1001',
+            name: 'Discontinued pairing (soft-deleted)',
+            price: { amount: '1', currency: 'KRW' },
+            pool: 'domestic',
+            modifiers: [],
+            availability: { isAvailable: false },
+            isActive: false,
+            deletedAt: '2026-03-01T00:00:00.000Z',
+            deletedBy: '65f0000000000000000s0001',
             createdAt: store.nowIso(),
           },
         ],
@@ -80,6 +127,11 @@ export function mountPublicRoutes(app, ctx) {
       pendingStaff: [],
       createdAt: store.nowIso(),
       updatedAt: store.nowIso(),
+    };
+    return {
+      ...doc,
+      floors: doc.floors.filter(isActiveRow),
+      menu: filterPublishedMenu(doc.menu),
     };
   }
 
@@ -132,14 +184,19 @@ export function mountPublicRoutes(app, ctx) {
       return;
     }
     const date = (req.query.date || '2026-05-10').toString();
+    const closedDay = NON_OPERATING_DATES.includes(date);
+    const slots = [
+      { date, time: '18:00', available: true, partySizeUpTo: 4 },
+      { date, time: '18:30', available: true, partySizeUpTo: 4 },
+      { date, time: '19:00', available: false, partySizeUpTo: 0 },
+    ].map((s) =>
+      closedDay ? { ...s, available: false, partySizeUpTo: 0 } : s,
+    );
     res.json({
       restaurantId: RID,
       date,
-      slots: [
-        { date, time: '18:00', available: true, partySizeUpTo: 4 },
-        { date, time: '18:30', available: true, partySizeUpTo: 4 },
-        { date, time: '19:00', available: false, partySizeUpTo: 0 },
-      ],
+      closedForNonOperatingDate: closedDay,
+      slots,
     });
   });
 

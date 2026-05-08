@@ -14,7 +14,7 @@ export function mountTableRoutes(app, ctx) {
     requirePermission('tables.edit'),
     (req, res) => {
       const k = floorKey(req.params.restaurantId, req.params.floorId);
-      const data = store.tablesByFloor.get(k) || [];
+      const data = (store.tablesByFloor.get(k) || []).filter((t) => t.deletedAt == null);
       res.json({ data });
     },
   );
@@ -28,7 +28,7 @@ export function mountTableRoutes(app, ctx) {
       const rid = req.params.restaurantId;
       const data = [];
       for (const [k, rows] of store.tablesByFloor) {
-        if (k.startsWith(`${rid}:`)) data.push(...rows);
+        if (k.startsWith(`${rid}:`)) data.push(...rows.filter((t) => t.deletedAt == null));
       }
       res.json({ data });
     },
@@ -40,7 +40,7 @@ export function mountTableRoutes(app, ctx) {
     requireRestaurantScope,
     requirePermission('tables.edit'),
     (req, res) => {
-      const row = findTable(store, req.params.restaurantId, req.params.tableId);
+      const row = findTable(store, req.params.restaurantId, req.params.tableId, { includeDeleted: false });
       if (!row) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
@@ -72,6 +72,8 @@ export function mountTableRoutes(app, ctx) {
         qrCode: null,
         createdAt: store.nowIso(),
         updatedAt: store.nowIso(),
+        deletedAt: null,
+        deletedBy: null,
       };
       list.push(t);
       store.tablesByFloor.set(k, list);
@@ -85,12 +87,15 @@ export function mountTableRoutes(app, ctx) {
     requireRestaurantScope,
     requirePermission('tables.edit'),
     (req, res) => {
-      const t = findTable(store, req.params.restaurantId, req.params.tableId);
-      if (!t) {
+      const t = findTable(store, req.params.restaurantId, req.params.tableId, { includeDeleted: true });
+      if (!t || t.deletedAt != null) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
       }
-      Object.assign(t, req.body || {}, { updatedAt: store.nowIso() });
+      const patch = { ...(req.body || {}) };
+      delete patch.deletedAt;
+      delete patch.deletedBy;
+      Object.assign(t, patch, { updatedAt: store.nowIso() });
       res.json(t);
     },
   );
@@ -105,9 +110,12 @@ export function mountTableRoutes(app, ctx) {
       const tid = req.params.tableId;
       for (const [k, list] of store.tablesByFloor) {
         if (!k.startsWith(`${rid}:`)) continue;
-        const idx = list.findIndex((x) => x.id === tid);
-        if (idx >= 0) {
-          list.splice(idx, 1);
+        const t = list.find((x) => x.id === tid);
+        if (t) {
+          if (t.deletedAt != null) return res.status(204).send();
+          t.deletedAt = store.nowIso();
+          t.deletedBy = req.staffUserId;
+          t.updatedAt = store.nowIso();
           return res.status(204).send();
         }
       }
@@ -134,7 +142,7 @@ export function mountTableRoutes(app, ctx) {
     requireRestaurantScope,
     requirePermission('tables.edit'),
     (req, res) => {
-      const t = findTable(store, req.params.restaurantId, req.params.tableId);
+      const t = findTable(store, req.params.restaurantId, req.params.tableId, { includeDeleted: false });
       if (!t) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
@@ -159,7 +167,7 @@ export function mountTableRoutes(app, ctx) {
     requireRestaurantScope,
     requirePermission('tables.edit'),
     (req, res) => {
-      const t = findTable(store, req.params.restaurantId, req.params.tableId);
+      const t = findTable(store, req.params.restaurantId, req.params.tableId, { includeDeleted: false });
       if (!t) {
         res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
         return;
@@ -171,11 +179,12 @@ export function mountTableRoutes(app, ctx) {
   );
 }
 
-function findTable(store, restaurantId, tableId) {
+function findTable(store, restaurantId, tableId, opts = {}) {
+  const { includeDeleted = true } = opts;
   for (const [k, list] of store.tablesByFloor) {
     if (!k.startsWith(`${restaurantId}:`)) continue;
     const t = list.find((x) => x.id === tableId);
-    if (t) return t;
+    if (t && (includeDeleted || t.deletedAt == null)) return t;
   }
   return null;
 }

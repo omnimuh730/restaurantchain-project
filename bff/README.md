@@ -11,6 +11,8 @@ Single HTTP entry for clients. Proxies to upstream services with timeouts, CORS,
 
 Future services (e.g. dedicated `auth/`): add a branch in `pickTarget` in [src/index.js](src/index.js) and document here.
 
+The BFF does not reinterpret payloads; field shapes and soft-delete behavior follow [project-docs/schema](../project-docs/schema) (e.g. reservations carry `orderId` after `deposit`/`paymentId`, restaurant `settings.general.nonOperatingDates`, `passCodeHash` on `cards` rows, and POS/table deletes that set `deletedAt` instead of removing rows).
+
 ## Setup
 
 ```bash

@@ -30,7 +30,8 @@ export function mountCustomerRoutes(app, ctx) {
 
   app.get('/me/payment-methods', customerAuth, (req, res) => {
     const u = store.users.get(req.customerUserId);
-    res.json({ data: u?.paymentMethods || [] });
+    const data = (u?.paymentMethods || []).filter((p) => p.deletedAt == null);
+    res.json({ data });
   });
 
   app.post('/me/payment-methods', customerAuth, (req, res) => {
@@ -51,9 +52,21 @@ export function mountCustomerRoutes(app, ctx) {
     res.status(201).location(`/me/payment-methods/${id}`).json(row);
   });
 
-  app.delete('/me/payment-methods/:methodId', customerAuth, (req, res) => {
+  app.delete('/me/payment-methods/:methodId', customerAuth, async (req, res) => {
     const u = store.users.get(req.customerUserId);
-    u.paymentMethods = (u.paymentMethods || []).filter((p) => p.id !== req.params.methodId);
+    if (!u) {
+      res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
+      return;
+    }
+    const row = (u.paymentMethods || []).find((p) => p.id === req.params.methodId);
+    if (!row || row.deletedAt != null) {
+      res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
+      return;
+    }
+    row.deletedAt = store.nowIso();
+    row.deletedBy = req.customerUserId;
+    u.updatedAt = store.nowIso();
+    await persistUser(db, u);
     res.status(204).send();
   });
 
@@ -63,31 +76,35 @@ export function mountCustomerRoutes(app, ctx) {
 
   app.get('/me/notifications', customerAuth, (req, res) => {
     const list = store.notificationsByUser.get(req.customerUserId) || [];
+    const active = list.filter((n) => n.deletedAt == null);
     const tab = (req.query.tab || 'all').toString();
     const filtered =
       tab === 'unread'
-        ? list.filter((n) => !n.read)
+        ? active.filter((n) => !n.read)
         : tab === 'reservation'
-          ? list.filter((n) => String(n.type || '').startsWith('reservation.'))
+          ? active.filter((n) => String(n.type || '').startsWith('reservation.'))
           : tab === 'system'
-            ? list.filter((n) => String(n.type || '').startsWith('system.'))
-            : list;
-    const unreadCount = list.filter((n) => !n.read).length;
+            ? active.filter((n) => String(n.type || '').startsWith('system.'))
+            : active;
+    const unreadCount = active.filter((n) => !n.read).length;
     res.json({ data: filtered, nextCursor: null, unreadCount });
   });
 
   app.post('/me/notifications/mark-all-read', customerAuth, (_req, res) => {
     const list = store.notificationsByUser.get(req.customerUserId) || [];
+    let affected = 0;
     for (const n of list) {
+      if (n.deletedAt != null) continue;
       n.read = true;
       n.readAt = store.nowIso();
+      affected += 1;
     }
-    res.json({ affected: list.length, unreadCount: 0 });
+    res.json({ affected, unreadCount: 0 });
   });
 
   app.post('/me/notifications/:notificationId/read', customerAuth, (req, res) => {
     const list = store.notificationsByUser.get(req.customerUserId) || [];
-    const n = list.find((x) => x.id === req.params.notificationId);
+    const n = list.find((x) => x.id === req.params.notificationId && x.deletedAt == null);
     if (!n) {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
@@ -97,18 +114,32 @@ export function mountCustomerRoutes(app, ctx) {
     res.json(n);
   });
 
-  app.delete('/me/notifications', customerAuth, (_req, res) => {
-    store.notificationsByUser.set(req.customerUserId, []);
+  app.delete('/me/notifications', customerAuth, (req, res) => {
+    const list = store.notificationsByUser.get(req.customerUserId) || [];
+    const at = store.nowIso();
+    for (const n of list) {
+      if (n.deletedAt == null) {
+        n.deletedAt = at;
+        n.deletedBy = req.customerUserId;
+      }
+    }
     res.status(204).send();
   });
 
-  app.delete('/me/notifications/:notificationId', customerAuth, (_req, res) => {
+  app.delete('/me/notifications/:notificationId', customerAuth, (req, res) => {
+    const list = store.notificationsByUser.get(req.customerUserId) || [];
+    const n = list.find((x) => x.id === req.params.notificationId);
+    if (n && n.deletedAt == null) {
+      n.deletedAt = store.nowIso();
+      n.deletedBy = req.customerUserId;
+    }
     res.status(204).send();
   });
 
   app.get('/me/saved-items', customerAuth, (req, res) => {
     const list = store.savedItemsByUser.get(req.customerUserId) || [];
-    res.json({ data: list, nextCursor: null });
+    const data = list.filter((x) => x.deletedAt == null);
+    res.json({ data, nextCursor: null });
   });
 
   app.post('/me/saved-items', customerAuth, (req, res) => {
@@ -128,10 +159,11 @@ export function mountCustomerRoutes(app, ctx) {
 
   app.delete('/me/saved-items/:savedItemId', customerAuth, (req, res) => {
     const list = store.savedItemsByUser.get(req.customerUserId) || [];
-    store.savedItemsByUser.set(
-      req.customerUserId,
-      list.filter((x) => x.id !== req.params.savedItemId),
-    );
+    const row = list.find((x) => x.id === req.params.savedItemId);
+    if (row && row.deletedAt == null) {
+      row.deletedAt = store.nowIso();
+      row.deletedBy = req.customerUserId;
+    }
     res.status(204).send();
   });
 

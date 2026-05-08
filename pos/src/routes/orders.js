@@ -1,5 +1,9 @@
 import { staffAuth, requireRestaurantScope, requirePermission } from '../middleware.js';
 
+function isItemRemoved(it) {
+  return it.deletedAt != null;
+}
+
 function emptyTotals() {
   return {
     domestic: { amount: '0', currency: 'KRW' },
@@ -94,6 +98,8 @@ export function mountOrderRoutes(app, ctx) {
     const item = {
       id: iid,
       menuItemId: req.body?.menuItemId || store.oid(),
+      deletedAt: null,
+      deletedBy: null,
       snapshot: {
         name: req.body?.name || 'Item',
         shortName: req.body?.shortName || '',
@@ -108,8 +114,6 @@ export function mountOrderRoutes(app, ctx) {
       addedAt: store.nowIso(),
     };
     o.items.push(item);
-    o.itemCount = o.items.filter((x) => x.chefStatus !== 'voided').length;
-    o.draftItemCount = o.items.filter((x) => x.chefStatus === 'draft').length;
     o.updatedAt = store.nowIso();
     recalcTotals(o);
     res.status(201).json(item);
@@ -122,7 +126,7 @@ export function mountOrderRoutes(app, ctx) {
       return;
     }
     const item = o.items.find((x) => x.id === req.params.itemId);
-    if (!item) {
+    if (!item || isItemRemoved(item)) {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
     }
@@ -138,14 +142,13 @@ export function mountOrderRoutes(app, ctx) {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
     }
-    const idx = o.items.findIndex((x) => x.id === req.params.itemId);
-    if (idx < 0 || !o.items[idx] || o.items[idx].chefStatus !== 'draft') {
+    const line = o.items.find((x) => x.id === req.params.itemId);
+    if (!line || isItemRemoved(line) || line.chefStatus !== 'draft') {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
     }
-    o.items.splice(idx, 1);
-    o.itemCount = o.items.filter((x) => x.chefStatus !== 'voided').length;
-    o.draftItemCount = o.items.filter((x) => x.chefStatus === 'draft').length;
+    line.deletedAt = store.nowIso();
+    line.deletedBy = req.staffUserId;
     o.updatedAt = store.nowIso();
     recalcTotals(o);
     res.status(204).send();
@@ -160,6 +163,7 @@ export function mountOrderRoutes(app, ctx) {
     const batchId = store.oid();
     const ids = new Set(req.body?.itemIds || []);
     for (const it of o.items) {
+      if (isItemRemoved(it)) continue;
       if (ids.has(it.id) && it.chefStatus === 'draft') {
         it.chefStatus = 'sent';
         it.sendBatchId = batchId;
@@ -247,7 +251,7 @@ export function mountOrderRoutes(app, ctx) {
   app.post('/pos/orders/:orderId/items/:itemId/void', staffAuth, requirePermission('orders.take'), (req, res) => {
     const o = store.orders.get(req.params.orderId);
     const item = o?.items.find((x) => x.id === req.params.itemId);
-    if (!item) {
+    if (!item || isItemRemoved(item)) {
       res.status(404).json({ type: 'https://errors.catchtable.example/not_found', title: 'Not found', status: 404 });
       return;
     }
@@ -272,7 +276,7 @@ export function mountOrderRoutes(app, ctx) {
 function recalcTotals(o) {
   let sum = 0;
   for (const it of o.items) {
-    if (it.chefStatus === 'voided') continue;
+    if (isItemRemoved(it) || it.chefStatus === 'voided') continue;
     const a = Number(it.snapshot?.price?.amount || 0);
     sum += a * (it.qty || 1);
   }
@@ -280,6 +284,6 @@ function recalcTotals(o) {
     domestic: { amount: String(sum), currency: 'KRW' },
     foreign: { amount: '0', currency: 'USD' },
   };
-  o.itemCount = o.items.filter((x) => x.chefStatus !== 'voided').length;
-  o.draftItemCount = o.items.filter((x) => x.chefStatus === 'draft').length;
+  o.itemCount = o.items.filter((x) => !isItemRemoved(x) && x.chefStatus !== 'voided').length;
+  o.draftItemCount = o.items.filter((x) => !isItemRemoved(x) && x.chefStatus === 'draft').length;
 }
