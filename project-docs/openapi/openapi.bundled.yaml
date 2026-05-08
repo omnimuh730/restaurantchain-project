@@ -8434,6 +8434,8 @@ components:
           description: ObjectIds of `cards` this user may use per link policy (not stored on `cards`).
           items:
             $ref: '#/components/schemas/ObjectId'
+        notifications:
+          $ref: '#/components/schemas/UserNotificationsSummary'
         createdAt:
           type: string
           format: date-time
@@ -8709,6 +8711,8 @@ components:
           format: date-time
         deletedBy:
           $ref: '#/components/schemas/ObjectId'
+        notifications:
+          $ref: '#/components/schemas/UserNotificationsSummary'
         createdAt:
           type: string
           format: date-time
@@ -9244,11 +9248,33 @@ components:
         createdAt:
           type: string
           format: date-time
+    UserNotificationsSummary:
+      type: object
+      description: Denormalized from `notifications` for this user; keep in sync on insert/mark-read/delete.
+      required:
+        - totalCount
+        - readCount
+        - readIds
+      properties:
+        totalCount:
+          type: integer
+          minimum: 0
+          description: Count of non-deleted notification rows for this recipient.
+        readCount:
+          type: integer
+          minimum: 0
+          description: Count of those rows with read=true.
+        readIds:
+          type: array
+          description: ObjectIds of notifications marked read; parallel to per-row read flags (may be capped).
+          items:
+            $ref: '#/components/schemas/ObjectId'
     Notification:
       type: object
       required:
         - id
         - recipientKind
+        - recipientId
         - type
         - title
         - body
@@ -9263,10 +9289,10 @@ components:
           enum:
             - customer
             - staff
-        customerUserId:
-          $ref: '#/components/schemas/ObjectId'
-        staffUserId:
-          $ref: '#/components/schemas/ObjectId'
+        recipientId:
+          allOf:
+            - $ref: '#/components/schemas/ObjectId'
+          description: Points at `customer_users._id` or `staff_users._id` per recipientKind.
         restaurantId:
           $ref: '#/components/schemas/ObjectId'
         type:

@@ -2,7 +2,7 @@
   {
     "_id": { "$oid": "65f0000000000000000a4001" },
     "recipientKind": "customer",
-    "customerUserId": { "$oid": "65f0000000000000000c0001" },
+    "recipientId": { "$oid": "65f0000000000000000c0001" },
     "type": "reservation_confirmed",
     "title": "Reservation Confirmed",
     "body": "Your table at Sakura Omakase on Apr 25, 11:00 is confirmed.",
@@ -20,7 +20,7 @@
   {
     "_id": { "$oid": "65f0000000000000000a4002" },
     "recipientKind": "customer",
-    "customerUserId": { "$oid": "65f0000000000000000c0001" },
+    "recipientId": { "$oid": "65f0000000000000000c0001" },
     "type": "you_earned_points",
     "title": "+50 points",
     "body": "Thanks for visiting Sakura Omakase! You earned 50 points.",
@@ -36,7 +36,7 @@
   {
     "_id": { "$oid": "65f0000000000000000a4003" },
     "recipientKind": "customer",
-    "customerUserId": { "$oid": "65f0000000000000000c0001" },
+    "recipientId": { "$oid": "65f0000000000000000c0001" },
     "type": "gift_received",
     "title": "Mike sent you a gift",
     "body": "$10.00 has been added to your USD wallet.",
@@ -51,8 +51,8 @@
   {
     "_id": { "$oid": "65f0000000000000000a4004" },
     "recipientKind": "staff",
-    "staffUserId":   { "$oid": "65f0000000000000000a0001" },
-    "restaurantId":  { "$oid": "65f0000000000000000b0001" },
+    "recipientId": { "$oid": "65f0000000000000000a0001" },
+    "restaurantId": { "$oid": "65f0000000000000000b0001" },
     "type": "new_reservation",
     "title": "New reservation",
     "body": "Sarah K. - 2 guests on Apr 25, 11:00.",
@@ -71,8 +71,8 @@
   {
     "_id": { "$oid": "65f0000000000000000a4005" },
     "recipientKind": "staff",
-    "staffUserId":   { "$oid": "65f0000000000000000a0002" },
-    "restaurantId":  { "$oid": "65f0000000000000000b0001" },
+    "recipientId": { "$oid": "65f0000000000000000a0002" },
+    "restaurantId": { "$oid": "65f0000000000000000b0001" },
     "type": "update_reservation",
     "title": "Reservation updated",
     "body": "Apr 25, 11:00 reservation changed to 3 guests.",

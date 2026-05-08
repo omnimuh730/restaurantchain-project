@@ -127,6 +127,9 @@ type CustomerUser = {
     cancelAtPeriodEnd: boolean;
   };
 
+  /** Denormalized from `notifications` — see `[notifications.md](./notifications.md)`. */
+  notifications: { totalCount: number; readCount: number; readIds: ObjectId[] };
+
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -155,6 +158,10 @@ type StaffUser = {
   inactivatedAt?: Date | null;
   deletedAt?: Date | null;
   deletedBy?: ObjectId | null;
+
+  /** Denormalized from `notifications` — see `[notifications.md](./notifications.md)`. */
+  notifications: { totalCount: number; readCount: number; readIds: ObjectId[] };
+
   createdAt: Date;
   updatedAt: Date;
 };
@@ -504,7 +511,8 @@ Indexes: `{userId:1, occurredAt:-1}`, `{reservationId:1}`, `{type:1, occurredAt:
 type Notification = {
   _id: ObjectId;
   recipientKind: "customer" | "staff";
-  customerUserId?: ObjectId; staffUserId?: ObjectId; restaurantId?: ObjectId;
+  recipientId: ObjectId;
+  restaurantId?: ObjectId;
   type:
     | "reservation_requested" | "reservation_confirmed" | "reservation_declined" | "reservation_reminder"
     | "table_ready" | "bill_finalized" | "payment_succeeded" | "payment_failed"
@@ -526,7 +534,7 @@ type Notification = {
 };
 ```
 
-Indexes: `{customerUserId:1, deletedAt:1, createdAt:-1}`, `{staffUserId:1, deletedAt:1, createdAt:-1}`, `{customerUserId:1, read:1}`, `{staffUserId:1, read:1}`, `{restaurantId:1, type:1, createdAt:-1}`.
+Indexes: `{recipientId:1, deletedAt:1, createdAt:-1}`, `{recipientId:1, read:1}`, `{restaurantId:1, type:1, createdAt:-1}`.
 
 ---
 

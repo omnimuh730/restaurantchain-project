@@ -23,7 +23,12 @@
     "updatedAt": { "$date": "2026-04-25T14:01:00.000Z" },
     "inactivatedAt": null,
     "deletedAt": null,
-    "deletedBy": null
+    "deletedBy": null,
+    "notifications": {
+      "totalCount": 1,
+      "readCount": 1,
+      "readIds": [{ "$oid": "65f0000000000000000a4004" }]
+    }
   },
   {
     "_id": { "$oid": "65f0000000000000000a0002" },
@@ -41,7 +46,12 @@
     "updatedAt": { "$date": "2026-04-25T13:45:00.000Z" },
     "inactivatedAt": null,
     "deletedAt": null,
-    "deletedBy": null
+    "deletedBy": null,
+    "notifications": {
+      "totalCount": 1,
+      "readCount": 0,
+      "readIds": []
+    }
   },
   {
     "_id": { "$oid": "65f0000000000000000a0003" },
@@ -57,6 +67,7 @@
     "updatedAt": { "$date": "2026-04-24T11:38:00.000Z" },
     "inactivatedAt": null,
     "deletedAt": null,
-    "deletedBy": null
+    "deletedBy": null,
+    "notifications": { "totalCount": 0, "readCount": 0, "readIds": [] }
   }
 ]

@@ -1,7 +1,7 @@
 erDiagram
 %% The 14-collection compromise schema. Lines marked with `||--o{` mean
 %% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
-%% Optional cache fields on `customer_users` (rewards, notifUnread) stay in sync
+%% Optional cache fields on `customer_users` (rewards, notification counters/readIds) stay in sync
 %% with authoritative ledger collections; wallet balances live on `cards`.
     customer_users ||--o{ reservations : "places"
     customer_users ||--o{ wallet_transactions : "owns ledger rows"
@@ -49,7 +49,9 @@ erDiagram
         array  ownedCardIds
         array  linkedCardIds
         object rewards       "cache · tier+points"
-        int    notifUnreadCount
+        int    notifTotalCount
+        int    notifReadCount
+        array  notifReadIds
         array  paymentMethods
         array  devices
         array  savedItems
@@ -131,9 +133,10 @@ erDiagram
     notifications {
         ObjectId _id
         string   recipientKind
-        ObjectId customerUserId
-        ObjectId staffUserId
+        ObjectId recipientId
         string   type
+        string   title
+        string   body
         bool     read
     }
     support_conversations {

@@ -342,7 +342,9 @@ erDiagram
         string phone
         object wallets
         object rewards
-        int    notifUnreadCount
+        int    notifTotalCount
+        int    notifReadCount
+        array  notifReadIds
         array  paymentMethods
         array  devices
         array  savedItems
@@ -415,9 +417,10 @@ erDiagram
     notifications {
         ObjectId _id
         string   recipientKind
-        ObjectId customerUserId
-        ObjectId staffUserId
+        ObjectId recipientId
         string   type
+        string   title
+        string   body
         bool     read
     }
     support_conversations {

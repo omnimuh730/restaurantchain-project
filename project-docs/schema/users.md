@@ -17,6 +17,7 @@ Source READMEs:
 | `sessions`                | Active refresh tokens / device sessions (auth infra; TTL'd).                                  |
 | `password_reset_sessions` | Multi-step Forgot Password flow state (auth infra; TTL'd).                                    |
 
+Per-user notification **counts** and **read id list** are denormalized on `customer_users` / `staff_users`; full payloads live in **`notifications`** — see `[notifications.md](./notifications.md)`.
 
 `security_questions`, `reward_tiers`, `subscription_plans`, `amenities`, `reservation_preferences`, and `support_articles` live in the `[metadata](./metadata.md)` collection.
 
@@ -134,6 +135,23 @@ type CustomerUser = {
     cancelAtPeriodEnd: boolean;
   };
 
+  /**
+   * Denormalized from `notifications` for this user (`recipientKind === "customer"`).
+   * Unread badge: `totalCount - readCount`. Keep in sync when inserting notifications or marking read.
+   * @see `[notifications.md](./notifications.md)`
+   */
+  notifications: {
+    /** All delivered rows for this user with `deletedAt == null`. */
+    totalCount: number;
+    /** Subset with `read === true` on the corresponding `notifications` row. */
+    readCount: number;
+    /**
+     * `notifications._id` for notifications this user has read.
+     * Authoritative per-row read state remains on each `notifications` document (`read`, `readAt`) for indexed queries; this array is maintained in parallel and may be **capped** (e.g. last N ids) for very large accounts.
+     */
+    readIds: ObjectId[];
+  };
+
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
@@ -184,6 +202,16 @@ type StaffUser = {
   /** Soft archive — row stays for audit; login disabled when set. */
   deletedAt?: Date | null;
   deletedBy?: ObjectId | null;
+
+  /**
+   * Denormalized from `notifications` for this staff member (`recipientKind === "staff"`).
+   * @see `[notifications.md](./notifications.md)`
+   */
+  notifications: {
+    totalCount: number;
+    readCount: number;
+    readIds: ObjectId[];
+  };
 
   createdAt: Date;
   updatedAt: Date;

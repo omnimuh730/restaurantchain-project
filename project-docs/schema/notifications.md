@@ -1,6 +1,6 @@
 # Schema · Notifications
 
-In-app notification feed (top-right bell). One row per delivered notification.
+In-app notification feed (top-right bell). **One document per delivered notification** in the `notifications` collection. **Counts and read-id references** for each recipient are denormalized on `customer_users` / `staff_users` — see `[users.md](./users.md)`.
 
 Source READMEs:
 
@@ -10,9 +10,9 @@ Source READMEs:
 
 ## Collection
 
-| Collection | Purpose |
-|---|---|
-| `notifications` | One row per delivered in-app notification (customer or staff). |
+| Collection       | Purpose                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `notifications`  | One row per delivered in-app notification (customer or staff).          |
 
 ## `notifications`
 
@@ -20,11 +20,12 @@ Source READMEs:
 type Notification = {
   _id: ObjectId;
 
-  // Recipient — exactly one of customerUserId or staffUserId is set
+  /** Who receives this row — `recipientId` points at that user document. */
   recipientKind: "customer" | "staff";
-  customerUserId?: ObjectId;
-  staffUserId?: ObjectId;
-  restaurantId?: ObjectId;          // present for staff or for tenant-scoped customer notifications
+  recipientId: ObjectId; // -> customer_users._id | staff_users._id
+
+  /** Present for staff notifications or tenant-scoped customer notifications. */
+  restaurantId?: ObjectId;
 
   type:
     // customer
@@ -51,12 +52,14 @@ type Notification = {
     | "staff_join_request"
     | string;
 
-  title: string;                    // "Reservation Confirmed"
-  body: string;                     // human readable line shown in the feed
+  /** Human-readable content shown in the feed. */
+  title: string;
+  body: string;
   iconHint: "success" | "notify" | "warning" | "error";
 
   deepLink: string;
 
+  /** Authoritative read flag for indexed queries; kept in sync with `users.notifications.readIds`. */
   read: boolean;
   readAt?: Date | null;
   // soft delete via "Remove all" or per-row trash
@@ -76,27 +79,30 @@ type Notification = {
 
 ### Indexes
 
-- `{ customerUserId: 1, deletedAt: 1, createdAt: -1 }`
-- `{ staffUserId: 1, deletedAt: 1, createdAt: -1 }`
-- `{ customerUserId: 1, read: 1 }`        // unread count badge
-- `{ staffUserId: 1, read: 1 }`
+- `{ recipientId: 1, deletedAt: 1, createdAt: -1 }`
+- `{ recipientId: 1, read: 1 }` — unread lists and badge recompute
 - `{ restaurantId: 1, type: 1, createdAt: -1 }`
 
 ### Behavior
 
-- The Notifications page tabs (`All`, `Unread`, `Read`) are filters on `read` and `deletedAt`.
-- `Mark all read` writes `{ read: true, readAt: now }` for the current user's unread rows; `customer_users.unreadNotifications` is decremented to 0.
-- `Remove all` writes `{ deletedAt: now }`; we do not hard-delete so analytics can audit delivery rate.
-- Tapping a notification routes by `deepLink` and patches `read = true` (and decrements `unreadNotifications`).
+- The Notifications page tabs (`All`, `Unread`, `Read`) filter on `read` and `deletedAt`.
+- **Insert**: create a `notifications` row; increment `users.notifications.totalCount` for the recipient; emit realtime.
+- **Mark read** (single row): set `read: true`, `readAt: now`; append `_id` to `users.notifications.readIds` (respect cap policy); increment `users.notifications.readCount`.
+- **Mark all read**: bulk-update matching rows; set `users.notifications.readCount = users.notifications.totalCount`; merge ids into `readIds` or rebuild from query depending on cap strategy.
+- **Remove all**: set `deletedAt: now` on rows; recompute or decrement `users.notifications.totalCount` (and adjust `readCount` / `readIds` consistently).
+- Tapping a notification routes by `deepLink` and applies the single-row mark-read flow above.
+
+### Consistency
+
+- Per-row **`read` / `readAt`** on `notifications` is the source optimized for list queries.
+- **`users.notifications.readIds`** duplicates which `_id`s are read for quick membership checks and client sync; it must stay aligned with `read: true` rows (subject to an optional max length — if capped, older read ids drop from the array but rows remain `read: true`).
 
 ---
 
 ## Cross-document rules
 
-- **Writers**: page-readme endpoints (`POST /reservations`, `POST /payments`, etc.) emit events that a worker consumes to insert `notifications` rows and trigger push delivery.
-- **Unread badge** caches:
-  - `customer_users.unreadNotifications` is recomputed on insert/mark-read/delete.
-  - Staff equivalent lives on `staff_users` if needed (optional; computed live from a small index lookup is also acceptable).
+- **Writers**: page-readme endpoints (`POST /reservations`, `POST /payments`, etc.) emit events that a worker consumes to insert `notifications` rows, bump **`users.notifications.totalCount`**, and trigger push delivery.
+- **Badge**: `unread = users.notifications.totalCount - users.notifications.readCount` (or derive from `readIds` only if you guarantee full coverage without a cap).
 
 ## Realtime channels
 

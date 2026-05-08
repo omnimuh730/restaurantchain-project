@@ -63,6 +63,7 @@ components:
           type: array
           description: ObjectIds of `cards` this user may use per link policy (not stored on `cards`).
           items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        notifications:    { $ref: '#/components/schemas/UserNotificationsSummary' }
         createdAt:          { type: string, format: date-time }
         updatedAt:          { type: string, format: date-time }
         deletedAt:          { type: [string, 'null'], format: date-time }
@@ -259,6 +260,7 @@ components:
         inactivatedAt:     { type: [string, 'null'], format: date-time }
         deletedAt:         { type: [string, 'null'], format: date-time }
         deletedBy:         { $ref: './common.yaml#/components/schemas/ObjectId' }
+        notifications:     { $ref: '#/components/schemas/UserNotificationsSummary' }
         createdAt:         { type: string, format: date-time }
         updatedAt:         { type: string, format: date-time }
 
@@ -1079,14 +1081,34 @@ components:
     # Notifications
     # ===========================================================
 
+    UserNotificationsSummary:
+      type: object
+      description: Denormalized from `notifications` for this user; keep in sync on insert/mark-read/delete.
+      required: [totalCount, readCount, readIds]
+      properties:
+        totalCount:
+          type: integer
+          minimum: 0
+          description: Count of non-deleted notification rows for this recipient.
+        readCount:
+          type: integer
+          minimum: 0
+          description: Count of those rows with read=true.
+        readIds:
+          type: array
+          description: ObjectIds of notifications marked read; parallel to per-row read flags (may be capped).
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+
     Notification:
       type: object
-      required: [id, recipientKind, type, title, body, read, deliveredChannels, createdAt]
+      required: [id, recipientKind, recipientId, type, title, body, read, deliveredChannels, createdAt]
       properties:
         id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
         recipientKind:      { type: string, enum: [customer, staff] }
-        customerUserId:     { $ref: './common.yaml#/components/schemas/ObjectId' }
-        staffUserId:        { $ref: './common.yaml#/components/schemas/ObjectId' }
+        recipientId:
+          allOf:
+            - $ref: './common.yaml#/components/schemas/ObjectId'
+          description: Points at `customer_users._id` or `staff_users._id` per recipientKind.
         restaurantId:       { $ref: './common.yaml#/components/schemas/ObjectId' }
         type:               { type: string }
         title:              { type: string }

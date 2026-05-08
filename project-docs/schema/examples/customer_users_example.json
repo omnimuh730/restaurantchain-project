@@ -76,6 +76,11 @@
       "currentPeriodEnd": { "$date": "2027-03-15T00:00:00.000Z" },
       "cancelAtPeriodEnd": false
     },
+    "notifications": {
+      "totalCount": 3,
+      "readCount": 1,
+      "readIds": [{ "$oid": "65f0000000000000000a4002" }]
+    },
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-25T08:13:09.000Z" },
     "deletedAt": null
@@ -106,6 +111,7 @@
     ],
     "referral": { "code": "MIKE-2P9", "redemptions": [] },
     "dailyBonus": { "history": [] },
+    "notifications": { "totalCount": 0, "readCount": 0, "readIds": [] },
     "createdAt": { "$date": "2025-12-15T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-20T00:00:00.000Z" },
     "deletedAt": null
