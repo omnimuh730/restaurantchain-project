@@ -1,39 +1,38 @@
 erDiagram
-%% The 15-collection compromise schema. Lines marked with `||--o{` mean
+%% The 14-collection compromise schema. Lines marked with `||--o{` mean
 %% "exactly-one to many"; `}o--o{` means many-to-many via embedded references.
-%% Cache fields living on `customer_users` (wallets, rewards, notifUnread) are
-%% kept in sync atomically with the authoritative ledger collections.
+%% Optional cache fields on `customer_users` (rewards, notifUnread) stay in sync
+%% with authoritative ledger collections; wallet balances live on `cards`.
     customer_users ||--o{ reservations : "places"
-    customer_users ||--o{ wallet_transactions : "owns ledger"
-    customer_users ||--o{ points_ledger : "owns ledger"
-    customer_users ||--o{ payments : "pays"
+    customer_users ||--o{ wallet_transactions : "owns ledger rows"
+    customer_users ||--o{ rewards : "owns points ledger"
+    customer_users ||--o{ payment_transactions : "pays"
     customer_users ||--o{ subscriptions : "may have Pro"
     customer_users ||--o{ notifications : "receives"
     customer_users ||--o{ support_conversations : "opens"
     customer_users ||--o{ reviews : "writes"
-    customer_users ||--o{ card_transactions : "card spend"
-    customer_users }o--o{ cards : "ownedCardIds linkedCardIds"
+    customer_users }o--o{ cards : "ownedWalletIds ownedCardIds linkedCardIds"
 
-    cards ||--o{ card_transactions : "debited"
+    cards ||--o{ wallet_transactions : "from to legs"
 
     restaurants ||--o{ reservations : "hosts"
     restaurants ||--o{ reviews : "summarized by"
     restaurants ||--o{ orders : "operates"
-    restaurants ||--o{ payments : "captures"
+    restaurants ||--o{ payment_transactions : "captures"
     restaurants ||--o{ subscriptions : "may have tier"
     restaurants ||--o{ notifications : "receives"
 
     reservations ||--o| orders : "may open one"
-    reservations ||--o{ payments : "deposits + bills"
+    reservations ||--o{ payment_transactions : "deposits + bills"
     reservations ||--o| reviews : "may reference"
 
-    orders ||--o{ payments : "settles"
+    orders ||--o{ payment_transactions : "settles"
 
-    subscriptions ||--o{ payments : "invoices"
+    subscriptions ||--o{ payment_transactions : "invoices"
     subscriptions ||--o{ wallet_transactions : "subscription_charge"
 
-    wallet_transactions }o--|| payments : "links to"
-    points_ledger }o--|| wallet_transactions : "may twin"
+    wallet_transactions }o--|| payment_transactions : "paymentTransactionId"
+    rewards }o--o| wallet_transactions : "may twin"
 
     support_conversations ||--o{ support_messages : "contains"
 
@@ -45,7 +44,9 @@ erDiagram
         string username
         string email
         string phone
-        object wallets       "cache · 3 pools"
+        array  ownedWalletIds
+        array  ownedCardIds
+        array  linkedCardIds
         object rewards       "cache · tier+points"
         int    notifUnreadCount
         array  paymentMethods
@@ -55,8 +56,6 @@ erDiagram
         array  friends
         object referral
         object dailyBonus
-        array  ownedCardIds
-        array  linkedCardIds
     }
     restaurants {
         ObjectId _id
@@ -90,7 +89,7 @@ erDiagram
         array    batches        "kitchen batches"
         object   totals
     }
-    payments {
+    payment_transactions {
         ObjectId _id
         string   purpose
         string   status
@@ -104,24 +103,26 @@ erDiagram
     }
     wallet_transactions {
         ObjectId _id
-        ObjectId customerUserId
-        string   pool
-        string   type
-        string   direction
+        ObjectId userId
+        string   kind
+        ObjectId fromAccountId
+        ObjectId toAccountId
         decimal  amount
-        decimal  balanceAfter
     }
     cards {
         ObjectId _id
+        string   type
+        ObjectId ownerUserId
+        string   pool
         string   cardNumber
         string   passCode
         decimal  balanceKrw
         decimal  balanceUsd
     }
-    points_ledger {
+    rewards {
         ObjectId _id
-        ObjectId customerUserId
-        string   reason
+        ObjectId userId
+        string   type
         string   direction
         int      points
         int      balanceAfter

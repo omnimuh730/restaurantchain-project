@@ -20,7 +20,7 @@ components:
 
     CustomerUser:
       type: object
-      required: [id, username, fullName, status, wallets, rewards, referral, dailyBonus, createdAt]
+      required: [id, username, fullName, status, ownedWalletIds, rewards, referral, dailyBonus, createdAt]
       properties:
         id:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
         username:           { type: string, example: sarah }
@@ -30,7 +30,14 @@ components:
         status:
           type: string
           enum: [active, deactivated, deleted]
-        wallets:            { $ref: '#/components/schemas/UserWallets' }
+        ownedWalletIds:
+          type: array
+          description: ObjectIds of `cards` rows with `type=wallet` (typically domestic, foreign, bonus).
+          items: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        wallets:
+          allOf:
+            - $ref: '#/components/schemas/UserWallets'
+          description: Optional denormalized balances for fast reads; source of truth is `cards` + `wallet_transactions`.
         rewards:            { $ref: '#/components/schemas/UserRewards' }
         paymentMethods:
           type: array
@@ -61,34 +68,27 @@ components:
 
     CardResponse:
       description: |
-        API view of a `cards` row. `passCode` exists only in MongoDB — never returned.
-        `access` is relative to the authenticated user (owned vs linked id list).
+        API view of a `cards` row (`type` wallet or card). `passCode` exists only in MongoDB — never returned.
+        For `type=card`, `access` is relative to the authenticated user (owned vs linked id list).
       type: object
-      required: [id, cardNumber, balanceKrw, balanceUsd, access]
+      required: [id, type, ownerUserId, balanceKrw, balanceUsd]
       properties:
         id: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        cardNumber: { type: string, description: 'Full or masked per product policy.' }
+        type: { type: string, enum: [wallet, card] }
+        ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
+        pool:
+          type: string
+          enum: [domestic, foreign, bonus]
+          description: Wallet rows only (`type=wallet`).
+        cardNumber:
+          type: string
+          description: Card rows only (`type=card`); full or masked per product policy.
         balanceKrw: { type: string, description: 'Decimal128 as string.' }
         balanceUsd: { type: string, description: 'Decimal128 as string.' }
-        access: { type: string, enum: [owned, linked] }
-
-    CardTransaction:
-      type: object
-      required: [id, usedByUserId, cardId, ownerUserId, cardKindSpentAs, amount, type, status, createdAt]
-      properties:
-        id: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        usedByUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        cardId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        ownerUserId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        cardKindSpentAs: { type: string, enum: [owned, linked] }
-        amount: { $ref: './common.yaml#/components/schemas/Money' }
-        type: { type: string, enum: [payment, transfer, adjustment] }
-        status: { type: string, enum: [pending, completed, failed, reversed] }
-        restaurantId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        reservationId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        orderId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        paymentId: { $ref: './common.yaml#/components/schemas/ObjectId' }
-        createdAt: { type: string, format: date-time }
+        access:
+          type: string
+          enum: [owned, linked]
+          description: For `type=card`, whether the caller holds this via `ownedCardIds` or `linkedCardIds`.
 
     UserWallets:
       type: object
@@ -1008,25 +1008,24 @@ components:
     # ===========================================================
 
     WalletTransaction:
+      description: API projection of a `wallet_transactions` ledger row (`cards` balance movements).
       type: object
-      required: [id, userId, pool, currency, type, direction, amount, balanceAfter, title, occurredAt, createdAt]
+      required: [id, userId, kind, amount, title, occurredAt, createdAt]
       properties:
         id:                      { $ref: './common.yaml#/components/schemas/ObjectId' }
         userId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
-        pool:                    { type: string, enum: [domestic, foreign, bonus] }
-        currency:                { type: string }
-        type:
-          type: string
-          enum: [top_up, top_up_bonus, restaurant_payment, reward_earned, referral_bonus, gift_sent, gift_received, birthday_bonus, daily_bonus, refund, subscription_charge, adjustment]
-        direction:               { type: string, enum: [credit, debit] }
+        kind:                    { type: string, description: 'Matches MongoDB `wallet_transactions.kind` (e.g. top_up, gift_sent, restaurant_payment).' }
+        fromAccountId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
+        toAccountId:             { $ref: './common.yaml#/components/schemas/ObjectId' }
         amount:                  { $ref: './common.yaml#/components/schemas/Money' }
-        balanceAfter:            { $ref: './common.yaml#/components/schemas/Money' }
-        paymentId:               { $ref: './common.yaml#/components/schemas/ObjectId' }
+        balanceAfterFrom:        { $ref: './common.yaml#/components/schemas/Money' }
+        balanceAfterTo:          { $ref: './common.yaml#/components/schemas/Money' }
+        paymentTransactionId:    { $ref: './common.yaml#/components/schemas/ObjectId' }
+        rewardsEntryId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
         giftId:                  { $ref: './common.yaml#/components/schemas/ObjectId' }
         reservationId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
         orderId:                 { $ref: './common.yaml#/components/schemas/ObjectId' }
         subscriptionId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
-        pointsLedgerId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
         dailyBonusDate:          { type: string, format: date }
         giftCounterpartyUserId:  { $ref: './common.yaml#/components/schemas/ObjectId' }
         giftCounterpartyUsernameAtSend: { type: string }
@@ -1036,7 +1035,7 @@ components:
         occurredAt:              { type: string, format: date-time }
         createdAt:               { type: string, format: date-time }
 
-    PointsLedgerEntry:
+    RewardEntry:
       type: object
       required: [id, userId, type, direction, points, balanceAfter, occurredAt, createdAt]
       properties:
@@ -1059,6 +1058,11 @@ components:
             id:   { $ref: './common.yaml#/components/schemas/ObjectId' }
         occurredAt:          { type: string, format: date-time }
         createdAt:           { type: string, format: date-time }
+
+    PointsLedgerEntry:
+      description: Deprecated name for `RewardEntry` (`rewards` collection).
+      allOf:
+        - $ref: '#/components/schemas/RewardEntry'
 
     # ===========================================================
     # Notifications

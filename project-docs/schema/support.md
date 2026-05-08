@@ -44,7 +44,7 @@ type SupportConversation = {
   context?: {
     reservationId?: ObjectId;
     orderId?: ObjectId;
-    paymentId?: ObjectId;
+    paymentTransactionId?: ObjectId;
     articleSlug?: string;           // metadata.support_articles.items[].slug
   };
 

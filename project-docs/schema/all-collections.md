@@ -1,25 +1,24 @@
-# All Collections (15)
+# All Collections (14)
 
 Single-file reference for every MongoDB collection in the system. For per-domain context, sample documents, and state diagrams, see the individual files in this directory.
 
 
 | #   | Collection              | Purpose                                                                                                                                              | Detail                                   |
 | --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | `customer_users`        | End users of the reservation app; embeds wallet cache, **`ownedCardIds` / `linkedCardIds`** (pointers to `cards`), rewards cache, social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
+| 1   | `customer_users`        | End users of the reservation app; **`ownedWalletIds` / `ownedCardIds` / `linkedCardIds`** (pointers to `cards`); optional balance/rewards cache; social, payment methods, daily-bonus, referral, subscription summary. | `[users.md](./users.md)`                 |
 | 2   | `staff_users`           | POS users tied to a single restaurant.                                                                                                               | `[users.md](./users.md)`                 |
 | 3   | `restaurants`           | Tenant root; embeds settings, floors, simplified menu, deposit cards, pending-staff inbox; **`reviewCount` + `averageRating` denormalized from reviews.** | `[restaurants.md](./restaurants.md)`     |
 | 4   | `tables`                | Per-floor operational state with QR; separate from `restaurants` to avoid contention.                                                                | `[tables.md](./tables.md)`               |
 | 5   | `reservations`          | Customer ↔ restaurant bridge; embeds invites and timeline.                                                                                           | `[reservations.md](./reservations.md)`   |
 | 6   | `orders`                | POS order; embeds items with chef batches via `sendBatchId`.                                                                                         | `[orders.md](./orders.md)`               |
-| 7   | `payments`              | Append-only payments; embeds `refunds[]` and PSP intent metadata.                                                                                    | `[payments.md](./payments.md)`           |
-| 8   | `wallet_transactions`   | Append-only wallet ledger across domestic, foreign, bonus pools.                                                                                     | `[wallets.md](./wallets.md)`             |
-| 9   | `points_ledger`         | Append-only loyalty points ledger.                                                                                                                   | `[rewards.md](./rewards.md)`             |
+| 7   | `payment_transactions`  | Append-only PSP / cash / checkout captures; embeds `refunds[]` and intent metadata.                                                                  | `[payments.md](./payments.md)`           |
+| 8   | `wallet_transactions`   | Append-only ledger for **all** internal `cards` balance moves (wallet↔wallet, card↔card, wallet↔card).                                                | `[wallets.md](./wallets.md)`             |
+| 9   | `rewards`               | Append-only loyalty points ledger.                                                                                                                   | `[rewards.md](./rewards.md)`             |
 | 10  | `notifications`         | One row per delivered in-app notification (customer or staff).                                                                                       | `[notifications.md](./notifications.md)` |
 | 11  | `support_conversations` | Support thread; embeds messages.                                                                                                                     | `[support.md](./support.md)`             |
 | 12  | `metadata`              | One doc per static catalog (security questions, plans, tiers, amenities, articles, ...).                                                             | `[metadata.md](./metadata.md)`           |
 | 13  | `reviews`               | Customer-authored restaurant reviews; optional stars per dimension + optional comment; optional `reservationId`.                                       | `[reviews.md](./reviews.md)`             |
-| 14  | `cards`                 | Minimal in-app card row: **`cardNumber`**, **`passCode`**, **`balanceKrw`**, **`balanceUsd`** only (plus `_id`).                         | `[credit-cards.md](./credit-cards.md)`   |
-| 15  | `card_transactions`     | Append-only ledger for card spend; debits always apply to a `cards` document.                                                                        | `[credit-cards.md](./credit-cards.md)`   |
+| 14  | `cards`                 | Unified stored-value surface: **`type`** `wallet` or `card`; balances on row; wallet rows use **`pool`**; card rows use **`cardNumber` / `passCode`**. | `[cards.md](./cards.md)`                 |
 
 
 Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password_reset_sessions` — see `[users.md](./users.md)`.
@@ -30,7 +29,7 @@ Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password
 - Cross-references: `<entity>Id: ObjectId`.
 - Money: `{ amount: Decimal128; currency: "KRW" | "USD" | string }`. Never floats. Never auto-converted.
 - Timestamps: `createdAt`, `updatedAt`. Soft delete via `deletedAt`.
-- Multi-tenant: POS-side carries `restaurantId`; customer-side carries `userId`; `reservations` and `payments` carry both as needed.
+- Multi-tenant: POS-side carries `restaurantId`; customer-side carries `userId`; `reservations` and `payment_transactions` carry both as needed.
 - Status fields are snake_case strings.
 - Indexes: foreign keys + `(tenantId, status, createdAt desc)` for feeds + TTL on transient docs + 2dsphere for geo.
 
@@ -55,13 +54,16 @@ type CustomerUser = {
     answerHash: string;
   }>;
 
-  wallets: {
-    domestic: { currency: "KRW" | string; amount: Decimal128 };
-    foreign:  { currency: "USD" | string; amount: Decimal128 };
-    bonus:    { currency: string;          amount: Decimal128 };
-  };
+  /**
+   * -> `cards._id` where `type === "wallet"` (typically three rows: domestic, foreign, bonus).
+   * Authoritative balances live on those `cards` documents, not here.
+   */
+  ownedWalletIds: ObjectId[];
 
+  /** -> `cards._id` where `type === "card"`. */
   ownedCardIds: ObjectId[];
+
+  /** Linked access to another user's `cards` rows — policy outside `cards`. */
   linkedCardIds: ObjectId[];
 
   rewards: {
@@ -383,10 +385,10 @@ Indexes: `{restaurantId:1, status:1, openedAt:-1}`, `{tableId:1, status:1}`, `{r
 
 ---
 
-## 7) `payments`
+## 7) `payment_transactions`
 
 ```ts
-type Payment = {
+type PaymentTransaction = {
   _id: ObjectId;
   groupId?: ObjectId;
   purpose: "reservation_deposit" | "order_bill" | "wallet_top_up" | "subscription";
@@ -397,7 +399,7 @@ type Payment = {
   method:
     | { kind: "cash"; tendered: { amount: Decimal128; currency: string }; change: { amount: Decimal128; currency: string } }
     | { kind: "credit"; brand: string; last4: string; pspChargeId: string }
-    | { kind: "wallet"; wallet: "domestic" | "foreign" | "bonus"; walletTransactionId?: ObjectId };
+    | { kind: "wallet"; cardsAccountId: ObjectId; walletTransactionId?: ObjectId };
   intent?: {
     pspProvider: string;
     pspIntentId: string;
@@ -437,35 +439,45 @@ Indexes: `{orderId:1}`, `{reservationId:1}`, `{topUpId:1}`, `{subscriptionId:1, 
 ```ts
 type WalletTransaction = {
   _id: ObjectId;
+  /** Primary user for feed queries (sender, payer, or owner of debited account — product rule). */
   userId: ObjectId;
-  pool: "domestic" | "foreign" | "bonus";
-  currency: string;
-  type:
-    | "top_up" | "top_up_bonus" | "restaurant_payment" | "reward_earned" | "referral_bonus"
-    | "gift_sent" | "gift_received" | "birthday_bonus" | "daily_bonus"
-    | "refund" | "subscription_charge" | "adjustment";
-  direction: "credit" | "debit";
+  /**
+   * High-level category. Examples: `top_up`, `withdraw`, `wallet_to_card`, `card_to_wallet`,
+   * `wallet_to_wallet`, `card_to_card`, `gift_sent`, `gift_received`, `restaurant_payment`,
+   * `refund`, `daily_bonus`, `subscription_charge`, `adjustment`, ...
+   */
+  kind: string;
+  /** Optional legs — both reference `cards._id` (`type` wallet or card). */
+  fromAccountId?: ObjectId;
+  toAccountId?: ObjectId;
   amount: { amount: Decimal128; currency: string };
-  balanceAfter: { amount: Decimal128; currency: string };
-  paymentId?: ObjectId; giftId?: ObjectId;
-  reservationId?: ObjectId; orderId?: ObjectId; subscriptionId?: ObjectId;
-  pointsLedgerId?: ObjectId; dailyBonusDate?: string;
+  balanceAfterFrom?: { amount: Decimal128; currency: string };
+  balanceAfterTo?: { amount: Decimal128; currency: string };
+  paymentTransactionId?: ObjectId;
+  rewardsEntryId?: ObjectId;
+  giftId?: ObjectId;
+  reservationId?: ObjectId;
+  orderId?: ObjectId;
+  subscriptionId?: ObjectId;
+  dailyBonusDate?: string;
   giftCounterpartyUserId?: ObjectId;
   giftCounterpartyUsernameAtSend?: string;
   giftMessage?: string;
-  title: string; description?: string;
-  occurredAt: Date; createdAt: Date;
+  title: string;
+  description?: string;
+  occurredAt: Date;
+  createdAt: Date;
 };
 ```
 
-Indexes: `{userId:1, occurredAt:-1}`, `{userId:1, pool:1, occurredAt:-1}`, `{type:1, occurredAt:-1}`, `{paymentId:1}`, `{giftId:1}`, `{reservationId:1}`, `{subscriptionId:1}`.
+Indexes: `{userId:1, occurredAt:-1}`, `{fromAccountId:1, occurredAt:-1}` sparse, `{toAccountId:1, occurredAt:-1}` sparse, `{paymentTransactionId:1}` sparse, `{rewardsEntryId:1}` sparse, `{giftId:1}`, `{reservationId:1}`, `{orderId:1}`.
 
 ---
 
-## 9) `points_ledger`
+## 9) `rewards`
 
 ```ts
-type PointsLedgerEntry = {
+type RewardEntry = {
   _id: ObjectId;
   userId: ObjectId;
   type:
@@ -531,7 +543,7 @@ type SupportConversation = {
   channel: "in_app_chat" | "email" | "phone";
   assignedAgentId?: string;
   context?: {
-    reservationId?: ObjectId; orderId?: ObjectId; paymentId?: ObjectId;
+    reservationId?: ObjectId; orderId?: ObjectId; paymentTransactionId?: ObjectId;
     articleSlug?: string;
   };
   messageCount: number;
@@ -617,41 +629,31 @@ Indexes: `{restaurantId:1, createdAt:-1}`, `{parentId:1, createdAt:-1}` sparse, 
 ## 14) `cards`
 
 ```ts
-type Card = {
+type CardsRowBase = {
   _id: ObjectId;
-  cardNumber: string;
-  passCode: string;
+  type: "wallet" | "card";
+  ownerUserId: ObjectId;
   balanceKrw: Decimal128;
   balanceUsd: Decimal128;
-};
-```
-
-Indexes: `{ cardNumber: 1 }` unique (typical).
-
----
-
-## 15) `card_transactions`
-
-```ts
-type CardTransaction = {
-  _id: ObjectId;
-  usedByUserId: ObjectId;
-  /** -> cards._id (debited row). */
-  cardId: ObjectId;
-  ownerUserId: ObjectId;
-  cardKindSpentAs: "owned" | "linked";
-  amount: { amount: Decimal128; currency: string };
-  type: "payment" | "transfer" | "adjustment" | string;
-  status: "pending" | "completed" | "failed" | "reversed";
-  restaurantId?: ObjectId;
-  reservationId?: ObjectId;
-  orderId?: ObjectId;
-  paymentId?: ObjectId;
   createdAt: Date;
+  updatedAt: Date;
 };
+
+type WalletRow = CardsRowBase & {
+  type: "wallet";
+  pool: "domestic" | "foreign" | "bonus";
+};
+
+type CardRow = CardsRowBase & {
+  type: "card";
+  cardNumber: string;
+  passCode: string;
+};
+
+type CardsDocument = WalletRow | CardRow;
 ```
 
-Indexes: `{usedByUserId:1, createdAt:-1}`, `{cardId:1, createdAt:-1}`, `{ownerUserId:1, cardId:1, createdAt:-1}`, `{restaurantId:1, createdAt:-1}` sparse, `{reservationId:1}` sparse.
+Indexes: `{ ownerUserId: 1, type: 1, pool: 1 }` unique partial (`type: "wallet"` only); `{ cardNumber: 1 }` unique partial (`type: "card"` only); `{ ownerUserId: 1, type: 1, createdAt: -1 }`.
 
 ---
 

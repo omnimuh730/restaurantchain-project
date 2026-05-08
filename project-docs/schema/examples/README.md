@@ -19,15 +19,14 @@ The same IDs are used across files so the documents cross-reference into a coher
 | `tables_example.json`                | `tables`                |
 | `reservations_example.json`          | `reservations`          |
 | `orders_example.json`                | `orders`                |
-| `payments_example.json`              | `payments`              |
+| `payment_transactions_example.json`  | `payment_transactions`  |
 | `wallet_transactions_example.json`   | `wallet_transactions`   |
-| `points_ledger_example.json`         | `points_ledger`         |
+| `rewards_example.json`               | `rewards`               |
 | `notifications_example.json`         | `notifications`         |
 | `support_conversations_example.json` | `support_conversations` |
 | `metadata_example.json`              | `metadata`              |
 | `reviews_example.json`               | `reviews`               |
 | `cards_example.json`                 | `cards`                 |
-| `card_transactions_example.json`    | `card_transactions`   |
 
 
 ## Shared IDs
@@ -47,12 +46,14 @@ The same IDs are used across files so the documents cross-reference into a coher
 | Payment (deposit)    | `65f0000000000000000e0010` |
 | Payment (order bill) | `65f0000000000000000e0011` |
 | Wallet top-up tx     | `65f0000000000000000a2001` |
-| Points ledger entry  | `65f0000000000000000a3001` |
+| Sarah domestic pool  | `65f0000000000000000c2001` |
+| Sarah foreign pool   | `65f0000000000000000c2002` |
+| Sarah bonus pool     | `65f0000000000000000c2003` |
+| Rewards entry        | `65f0000000000000000a3001` |
 | Notification         | `65f0000000000000000a4001` |
 | Support conv         | `65f0000000000000000a6001` |
 | Review (Sarah→Sakura)| `65f0000000000000000c9001` |
 | Sarah family card    | `65f0000000000000000c2101` |
-| Card payment tx      | `65f0000000000000000c8001` |
 
 
 ## Loading

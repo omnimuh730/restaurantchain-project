@@ -5,27 +5,26 @@ Canonical MongoDB collection schemas derived from the page-driven READMEs in:
 - `api-docs/page-driven/pos/` (restaurant/staff facing)
 - `api-docs/page-driven/reservation/` (customer facing)
 
-This schema follows a **simplified 15-collection design**: aggressive embedding for bounded data, separate collections only for unbounded growth (ledgers, notifications, reviews, card spend), realtime contention (tables), or audit-critical history (payments).
+This schema follows a **simplified 14-collection design**: aggressive embedding for bounded data, separate collections only for unbounded growth (ledgers, notifications, reviews), realtime contention (tables), or audit-critical history (`payment_transactions`).
 
 ## Collection list
 
 | # | Collection | File | Notes |
 |---|---|---|---|
-| 1 | `customer_users` | [`users.md`](./users.md) | Embeds wallets cache, **`ownedCardIds` / `linkedCardIds`** (refs to `cards`), rewards cache, saved items, friends, payment methods, daily-bonus history, and customer Pro subscription summary. |
+| 1 | `customer_users` | [`users.md`](./users.md) | **`ownedWalletIds` / `ownedCardIds` / `linkedCardIds`** (refs to `cards`); optional balance/rewards cache; saved items, friends, payment methods, daily-bonus history, and customer Pro subscription summary. |
 | 2 | `staff_users` | [`users.md`](./users.md) | POS staff identities and permissions. |
 | 3 | `restaurants` | [`restaurants.md`](./restaurants.md) | Embeds settings, floors, simplified menu items, primary/secondary phones, deposit cards; **`reviewCount` + `averageRating`** denormalized from `reviews`. |
 | 4 | `tables` | [`tables.md`](./tables.md) | Separate — operational realtime state. |
 | 5 | `reservations` | [`reservations.md`](./reservations.md) | Bridge between users and restaurants; embeds invites and timeline. |
 | 6 | `orders` | [`orders.md`](./orders.md) | Embeds `order_items[]`; chef batches expressed via `sendBatchId` field. |
-| 7 | `payments` | [`payments.md`](./payments.md) | Append-only; embeds `refunds[]` and method/intent metadata. |
-| 8 | `wallet_transactions` | [`wallets.md`](./wallets.md) | Append-only ledger; wallet amounts on user are derived. |
-| 9 | `points_ledger` | [`rewards.md`](./rewards.md) | Append-only ledger; tier/points cache lives on user. |
+| 7 | `payment_transactions` | [`payments.md`](./payments.md) | Append-only PSP / cash / checkout; embeds `refunds[]` and method/intent metadata. |
+| 8 | `wallet_transactions` | [`wallets.md`](./wallets.md) | Append-only ledger for all internal `cards` movements (wallets, cards, cross-loads). |
+| 9 | `rewards` | [`rewards.md`](./rewards.md) | Append-only points ledger; tier/points cache may live on user. |
 | 10 | `notifications` | [`notifications.md`](./notifications.md) | High-write fan-out; push tokens live on user devices. |
 | 11 | `support_conversations` | [`support.md`](./support.md) | Embeds `messages[]`. |
 | 12 | `metadata` | [`metadata.md`](./metadata.md) | Read-mostly catalogs (security questions, plans, tiers, amenities, preferences, support articles) as one doc per catalog. |
 | 13 | `reviews` | [`reviews.md`](./reviews.md) | Restaurant reviews; optional per-dimension stars and optional comment; optional `reservationId`. |
-| 14 | `cards` | [`credit-cards.md`](./credit-cards.md) | Minimal stored-value card: `cardNumber`, `passCode`, `balanceKrw`, `balanceUsd` only. |
-| 15 | `card_transactions` | [`credit-cards.md`](./credit-cards.md) | Append-only spend/transfer history for in-app cards (distinct from `wallet_transactions`). |
+| 14 | `cards` | [`cards.md`](./cards.md) | Unified collection: `type` wallet or card; balances on row; wallet uses `pool`; card uses `cardNumber` / `passCode`. |
 
 Plus auxiliary auth-infra collections (TTL'd, isolated): `sessions`, `password_reset_sessions`. Documented in `users.md`.
 
@@ -46,7 +45,7 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 | `restaurant_phones` | `restaurants.primaryPhone`, `restaurants.secondaryPhone` |
 | `restaurant_payment_cards` / `restaurant_deposit_cards` | `restaurants.depositCards[]` |
 | `staff_join_requests` | `restaurants.pendingStaff[]` |
-| `wallets` | `customer_users.wallets.{domestic,foreign,bonus}` |
+| `wallets` (as separate collection) | Replaced by **`cards`** rows with `type: "wallet"` + `customer_users.ownedWalletIds` |
 | `customer_payment_methods` | `customer_users.paymentMethods[]` |
 | `friend_requests`, `friends` | `customer_users.friends[]` |
 | `saved_items` | `customer_users.savedItems[]` |
@@ -60,9 +59,9 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 | `support_articles` | `metadata` doc `_id: "support_articles"` |
 | `reservation_invites` | `reservations.invites[]` |
 | subscription billing state | Embedded summaries on subject docs (`customer_users.subscription`, `restaurants.subscription`) with static plan catalog in `metadata.subscription_plans` |
-| `wallet_top_ups`, `wallet_gifts` | `wallet_transactions` rows + `payments` rows linked by `groupId`/`giftId` |
+| `wallet_top_ups`, `wallet_gifts` | `wallet_transactions` rows + `payment_transactions` when PSP capture exists (`paymentTransactionId`); gifts without PSP are `wallet_transactions` only |
 | `chef_tickets`, `chef_ticket_items` | `orders.items[].chefStatus` and `orders.items[].sendBatchId` |
-| `payment_intents` | `payments.intent` (latest intent state) |
+| `payment_intents` | `payment_transactions.intent` (latest intent state) |
 | `support_messages` | `support_conversations.messages[]` |
 
 ### Stayed separate (with reason)
@@ -70,13 +69,12 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 | Collection | Reason |
 |---|---|
 | `tables` | Operational realtime state changed concurrently by multiple staff; separate to avoid contention on the restaurant doc. |
-| `wallet_transactions` | Append-only money ledger; unbounded growth; financial audit; power-user volume exceeds safe embedding. |
-| `cards` | Stored-value credentials + balances; kept separate from `customer_users` so the user doc only holds `ownedCardIds` / `linkedCardIds`. |
-| `card_transactions` | Append-only card spend ledger; unbounded growth; same rationale as wallet ledger but for stored-value cards. |
+| `wallet_transactions` | Append-only ledger for every internal `cards` balance change; unbounded growth; financial audit. |
+| `cards` | Wallet + stored-value card rows; kept separate from `customer_users` so the user doc only holds `ownedWalletIds` / `ownedCardIds` / `linkedCardIds`. |
 | `reviews` | Unbounded user-generated content; public listings and moderation; drives denormalized aggregates on `restaurants`. |
-| `points_ledger` | Append-only loyalty ledger; required to explain tier and reverse fraud. |
+| `rewards` | Append-only loyalty ledger; required to explain tier and reverse fraud. |
 | `notifications` | Highest write rate per recipient; unbounded growth; mark-read/delete-all are per-row mutations. |
-| `payments` | Append-only finance record; cross-purpose queries (reservation, order, top-up, subscription); audit. |
+| `payment_transactions` | Append-only payment capture record; cross-purpose queries (reservation, order, top-up, subscription); audit. |
 | `reservations` | Bridges customer ↔ restaurant; queried from both sides; central state machine. |
 | `orders` | Operational; lifecycle independent of any single reservation. |
 | `support_conversations` | Agent queue requires querying all open chats across users. |
@@ -108,7 +106,7 @@ KRW has zero minor units; USD has two. Servers compute totals in `Decimal128` an
 
 ### Multi-tenant scoping
 
-POS-side collections carry `restaurantId`. Customer-side collections carry `userId`. `reservations` and `payments` may carry both.
+POS-side collections carry `restaurantId`. Customer-side collections carry `userId`. `reservations` and `payment_transactions` may carry both.
 
 ### Status enums
 
@@ -126,9 +124,9 @@ Each file lists `Indexes:` blocks. Defaults:
 
 ### Money-related integrity rules
 
-- Wallet amounts on `customer_users` are derived from `wallet_transactions` and recomputable.
-- Reward points/tier on `customer_users` are derived from `points_ledger` and recomputable.
-- Payments are append-only. Refunds are embedded rows on the parent payment, not mutations.
+- Wallet and card balances on **`cards`** are authoritative; optional snapshots on `customer_users` (if used) are derived from **`wallet_transactions`** + **`cards`** and recomputable.
+- Reward points/tier on `customer_users` are derived from **`rewards`** and recomputable.
+- **`payment_transactions`** are append-only. Refunds are embedded rows on the parent document, not mutations.
 
 ### Realtime channels
 

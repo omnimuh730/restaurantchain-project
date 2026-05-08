@@ -618,7 +618,8 @@ components:
         - payment.refund.succeeded
         - payment.refund.failed
         - wallet.transaction.created
-        - user.wallets.updated
+        - user.storedValue.updated
+        - cards.balances.updated
         - points.ledger.created
         - user.rewards.updated
         - notification.created

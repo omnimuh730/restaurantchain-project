@@ -33,10 +33,11 @@ x-operations:
   GetWallets:
     tags: [Customer · Wallets]
     operationId: getWallets
-    summary: Read wallet balances (cache from `customer_users.wallets`).
+    summary: Read wallet pool balances (`cards` rows for `ownedWalletIds`).
     description: |
-      Cheap read backed by the cache on the user document. The authoritative source is
-      the `wallet_transactions` ledger; the cache is updated atomically with each entry.
+      Returns the three logical pools by resolving `customer_users.ownedWalletIds` to `cards` documents
+      (`type=wallet`). Optional denormalized `customer_users.wallets` may be used as a cache only;
+      source of truth is `cards` balances updated atomically with `wallet_transactions`.
     responses:
       '200':
         description: Wallets cache.
@@ -53,15 +54,12 @@ x-operations:
       - name: pool
         in: query
         schema: { type: string, enum: [domestic, foreign, bonus, all], default: all }
-      - name: type
+      - name: kind
         in: query
+        description: Filter by `wallet_transactions.kind` (`all` disables the filter).
         schema:
           type: string
-          enum: [top_up, top_up_bonus, restaurant_payment, reward_earned, referral_bonus, gift_sent, gift_received, birthday_bonus, daily_bonus, refund, subscription_charge, adjustment, all]
           default: all
-      - name: direction
-        in: query
-        schema: { type: string, enum: [credit, debit, all], default: all }
       - $ref: '../components/common.yaml#/components/parameters/FromDateQuery'
       - $ref: '../components/common.yaml#/components/parameters/ToDateQuery'
       - $ref: '../components/common.yaml#/components/parameters/CursorQuery'
@@ -87,7 +85,7 @@ x-operations:
     operationId: startTopUp
     summary: Start a wallet top-up. Returns a PSP intent for client confirmation.
     description: |
-      Creates a `payments` document with `purpose=wallet_top_up` in `processing` and a
+      Creates a `payment_transactions` document with `purpose=wallet_top_up` in `processing` and a
       matching draft `wallet_transactions` row that is committed only when the PSP webhook
       fires (or when `:confirm` is called for SDK-driven providers).
 
@@ -156,7 +154,7 @@ x-operations:
                 topUpId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
                 status:  { type: string, enum: [requires_payment, processing, succeeded, failed, cancelled] }
                 walletTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
-                paymentId:           { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
+                paymentTransactionId: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
                 failure:
                   type: object
                   properties:

@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    15-collection MongoDB schema in `project-docs/schema/`.
+    14-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -35,7 +35,7 @@ tags:
   - name: Customer · Wallets
     description: Wallet balances, top-ups, gifts, transactions.
   - name: Customer · Credit cards
-    description: In-app stored-value cards (owned + linked access), distinct from wallets.
+    description: In-app `cards` with `type=card` (owned + linked); activity in `wallet_transactions`.
   - name: Customer · Reviews
     description: Restaurant reviews and discovery review feeds.
   - name: Customer · Rewards
@@ -2009,10 +2009,11 @@ paths:
       tags:
         - Customer · Wallets
       operationId: getWallets
-      summary: Read wallet balances (cache from `customer_users.wallets`).
+      summary: Read wallet pool balances (`cards` rows for `ownedWalletIds`).
       description: |
-        Cheap read backed by the cache on the user document. The authoritative source is
-        the `wallet_transactions` ledger; the cache is updated atomically with each entry.
+        Returns the three logical pools by resolving `customer_users.ownedWalletIds` to `cards` documents
+        (`type=wallet`). Optional denormalized `customer_users.wallets` may be used as a cache only;
+        source of truth is `cards` balances updated atomically with `wallet_transactions`.
       responses:
         '200':
           description: Wallets cache.
@@ -2039,33 +2040,11 @@ paths:
               - bonus
               - all
             default: all
-        - name: type
+        - name: kind
           in: query
+          description: Filter by `wallet_transactions.kind` (`all` disables the filter).
           schema:
             type: string
-            enum:
-              - top_up
-              - top_up_bonus
-              - restaurant_payment
-              - reward_earned
-              - referral_bonus
-              - gift_sent
-              - gift_received
-              - birthday_bonus
-              - daily_bonus
-              - refund
-              - subscription_charge
-              - adjustment
-              - all
-            default: all
-        - name: direction
-          in: query
-          schema:
-            type: string
-            enum:
-              - credit
-              - debit
-              - all
             default: all
         - $ref: '#/components/parameters/FromDateQuery'
         - $ref: '#/components/parameters/ToDateQuery'
@@ -2096,7 +2075,7 @@ paths:
       operationId: startTopUp
       summary: Start a wallet top-up. Returns a PSP intent for client confirmation.
       description: |
-        Creates a `payments` document with `purpose=wallet_top_up` in `processing` and a
+        Creates a `payment_transactions` document with `purpose=wallet_top_up` in `processing` and a
         matching draft `wallet_transactions` row that is committed only when the PSP webhook
         fires (or when `:confirm` is called for SDK-driven providers).
 
@@ -2206,7 +2185,7 @@ paths:
                       - cancelled
                   walletTransactionId:
                     $ref: '#/components/schemas/ObjectId'
-                  paymentId:
+                  paymentTransactionId:
                     $ref: '#/components/schemas/ObjectId'
                   failure:
                     type: object
@@ -2373,7 +2352,7 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: createOwnedCard
-      summary: Create a `cards` row and append its id to `ownedCardIds`.
+      summary: Create a `cards` row (`type=card`) and append its id to `ownedCardIds`.
       description: |
         Server assigns a unique `cardNumber`, persists `passCode` on the card document,
         initializes balances (e.g. zero). Returns a safe projection without `passCode`.
@@ -2416,7 +2395,7 @@ paths:
       tags:
         - Customer · Credit cards
       operationId: listCardTransactions
-      summary: History for cards the user owns or is linked to.
+      summary: History for `cards` rows (`type=card`) the user owns or is linked to (`wallet_transactions`).
       parameters:
         - name: cardId
           in: query
@@ -2437,7 +2416,7 @@ paths:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/CardTransaction'
+                          $ref: '#/components/schemas/WalletTransaction'
         '401':
           $ref: '#/components/responses/Unauthenticated'
   /me/cards:link-request:
@@ -2447,8 +2426,7 @@ paths:
       operationId: requestLinkByNumber
       summary: Verify card number + passCode and attach a link for the current user (policy on `customer_users`).
       description: |
-        On success, implementation updates link metadata / `linkedCardIds` as designed; **`cards`** stays
-        five fields only.
+        On success, implementation updates link metadata / `linkedCardIds` as designed.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -2579,7 +2557,7 @@ paths:
                   pointsAwarded:
                     type: integer
                     minimum: 0
-                    description: When policy grants `review_bonus` on points_ledger.
+                    description: When policy grants `review_bonus` on `rewards`.
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
@@ -2659,7 +2637,7 @@ paths:
       summary: Read rewards (tier, points, points-to-next-tier).
       description: |
         Cheap read backed by `customer_users.rewards` cache. The authoritative source is
-        the `points_ledger` collection.
+        the `rewards` collection.
       responses:
         '200':
           description: Rewards.
@@ -2717,7 +2695,7 @@ paths:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/PointsLedgerEntry'
+                          $ref: '#/components/schemas/RewardEntry'
         '401':
           $ref: '#/components/responses/Unauthenticated'
   /me/notifications:
@@ -4003,7 +3981,7 @@ paths:
                   maxLength: 2000
       responses:
         '200':
-          description: Review saved. May credit `points_ledger` `review_bonus`.
+          description: Review saved. May credit `rewards` (`review_bonus`).
           content:
             application/json:
               schema:
@@ -8459,7 +8437,7 @@ components:
         - username
         - fullName
         - status
-        - wallets
+        - ownedWalletIds
         - rewards
         - referral
         - dailyBonus
@@ -8489,8 +8467,15 @@ components:
             - active
             - deactivated
             - deleted
+        ownedWalletIds:
+          type: array
+          description: ObjectIds of `cards` rows with `type=wallet` (typically domestic, foreign, bonus).
+          items:
+            $ref: '#/components/schemas/ObjectId'
         wallets:
-          $ref: '#/components/schemas/UserWallets'
+          allOf:
+            - $ref: '#/components/schemas/UserWallets'
+          description: Optional denormalized balances for fast reads; source of truth is `cards` + `wallet_transactions`.
         rewards:
           $ref: '#/components/schemas/UserRewards'
         paymentMethods:
@@ -8990,16 +8975,13 @@ components:
           type: string
           format: date-time
     WalletTransaction:
+      description: API projection of a `wallet_transactions` ledger row (`cards` balance movements).
       type: object
       required:
         - id
         - userId
-        - pool
-        - currency
-        - type
-        - direction
+        - kind
         - amount
-        - balanceAfter
         - title
         - occurredAt
         - createdAt
@@ -9008,39 +8990,22 @@ components:
           $ref: '#/components/schemas/ObjectId'
         userId:
           $ref: '#/components/schemas/ObjectId'
-        pool:
+        kind:
           type: string
-          enum:
-            - domestic
-            - foreign
-            - bonus
-        currency:
-          type: string
-        type:
-          type: string
-          enum:
-            - top_up
-            - top_up_bonus
-            - restaurant_payment
-            - reward_earned
-            - referral_bonus
-            - gift_sent
-            - gift_received
-            - birthday_bonus
-            - daily_bonus
-            - refund
-            - subscription_charge
-            - adjustment
-        direction:
-          type: string
-          enum:
-            - credit
-            - debit
+          description: Matches MongoDB `wallet_transactions.kind` (e.g. top_up, gift_sent, restaurant_payment).
+        fromAccountId:
+          $ref: '#/components/schemas/ObjectId'
+        toAccountId:
+          $ref: '#/components/schemas/ObjectId'
         amount:
           $ref: '#/components/schemas/Money'
-        balanceAfter:
+        balanceAfterFrom:
           $ref: '#/components/schemas/Money'
-        paymentId:
+        balanceAfterTo:
+          $ref: '#/components/schemas/Money'
+        paymentTransactionId:
+          $ref: '#/components/schemas/ObjectId'
+        rewardsEntryId:
           $ref: '#/components/schemas/ObjectId'
         giftId:
           $ref: '#/components/schemas/ObjectId'
@@ -9049,8 +9014,6 @@ components:
         orderId:
           $ref: '#/components/schemas/ObjectId'
         subscriptionId:
-          $ref: '#/components/schemas/ObjectId'
-        pointsLedgerId:
           $ref: '#/components/schemas/ObjectId'
         dailyBonusDate:
           type: string
@@ -9112,21 +9075,35 @@ components:
             - cancelled
     CardResponse:
       description: |
-        API view of a `cards` row. `passCode` exists only in MongoDB — never returned.
-        `access` is relative to the authenticated user (owned vs linked id list).
+        API view of a `cards` row (`type` wallet or card). `passCode` exists only in MongoDB — never returned.
+        For `type=card`, `access` is relative to the authenticated user (owned vs linked id list).
       type: object
       required:
         - id
-        - cardNumber
+        - type
+        - ownerUserId
         - balanceKrw
         - balanceUsd
-        - access
       properties:
         id:
           $ref: '#/components/schemas/ObjectId'
+        type:
+          type: string
+          enum:
+            - wallet
+            - card
+        ownerUserId:
+          $ref: '#/components/schemas/ObjectId'
+        pool:
+          type: string
+          enum:
+            - domestic
+            - foreign
+            - bonus
+          description: Wallet rows only (`type=wallet`).
         cardNumber:
           type: string
-          description: Full or masked per product policy.
+          description: Card rows only (`type=card`); full or masked per product policy.
         balanceKrw:
           type: string
           description: Decimal128 as string.
@@ -9138,58 +9115,7 @@ components:
           enum:
             - owned
             - linked
-    CardTransaction:
-      type: object
-      required:
-        - id
-        - usedByUserId
-        - cardId
-        - ownerUserId
-        - cardKindSpentAs
-        - amount
-        - type
-        - status
-        - createdAt
-      properties:
-        id:
-          $ref: '#/components/schemas/ObjectId'
-        usedByUserId:
-          $ref: '#/components/schemas/ObjectId'
-        cardId:
-          $ref: '#/components/schemas/ObjectId'
-        ownerUserId:
-          $ref: '#/components/schemas/ObjectId'
-        cardKindSpentAs:
-          type: string
-          enum:
-            - owned
-            - linked
-        amount:
-          $ref: '#/components/schemas/Money'
-        type:
-          type: string
-          enum:
-            - payment
-            - transfer
-            - adjustment
-        status:
-          type: string
-          enum:
-            - pending
-            - completed
-            - failed
-            - reversed
-        restaurantId:
-          $ref: '#/components/schemas/ObjectId'
-        reservationId:
-          $ref: '#/components/schemas/ObjectId'
-        orderId:
-          $ref: '#/components/schemas/ObjectId'
-        paymentId:
-          $ref: '#/components/schemas/ObjectId'
-        createdAt:
-          type: string
-          format: date-time
+          description: For `type=card`, whether the caller holds this via `ownedCardIds` or `linkedCardIds`.
     ReviewRatingPartial:
       type: object
       description: All dimensions optional; include only keys the customer set (1–5 stars).
@@ -9323,7 +9249,7 @@ components:
             - string
             - 'null'
           maxLength: 2000
-    PointsLedgerEntry:
+    RewardEntry:
       type: object
       required:
         - id

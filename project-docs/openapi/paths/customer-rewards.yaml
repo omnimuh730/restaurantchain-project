@@ -28,7 +28,7 @@ x-operations:
     summary: Read rewards (tier, points, points-to-next-tier).
     description: |
       Cheap read backed by `customer_users.rewards` cache. The authoritative source is
-      the `points_ledger` collection.
+      the `rewards` collection.
     responses:
       '200':
         description: Rewards.
@@ -67,5 +67,5 @@ x-operations:
                   properties:
                     data:
                       type: array
-                      items: { $ref: '../components/schemas.yaml#/components/schemas/PointsLedgerEntry' }
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/RewardEntry' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }

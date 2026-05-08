@@ -113,7 +113,7 @@ type Reservation = {
     valueOfPrice?: number | null;
   } | null;
   ratingComment?: string | null;
-  pointsEarned?: number;            // mirrored from points_ledger
+  pointsEarned?: number;            // mirrored from `rewards`
 
   createdAt: Date;
   updatedAt: Date;
@@ -158,7 +158,7 @@ dining ─request bill─▶ bill_requested ─finalize─▶ bill ─pay─▶ 
 - The booking wizard state is maintained client-side until Step 4 succeeds; then a `reservations` row is inserted.
 - A reservation moving from `requested` → `declined` triggers a refund (embedded on the parent `payments` row) and sets `refundId`.
 - A reservation moving to `arrived` sets `tableId`, opens an `orders` row (`orderId`), and flips the `tables` row's `status` to `occupied`.
-- A reservation that ends in `visited` triggers a points credit recorded in `points_ledger`; `pointsEarned` mirrors the credited points.
+- A reservation that ends in `visited` triggers a points credit recorded in `rewards`; `pointsEarned` mirrors the credited points.
 - Invite acceptance updates the matching `invites[i].status` and sends a notification to the inviter.
 - Calendar conflicts on POS are enforced by the unique combination of `(tableId, date, time)` plus party-size compatibility, not by the reservation document alone.
 

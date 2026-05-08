@@ -12,20 +12,11 @@
       { "questionId": "mother_maiden",  "answerHash": "sha256:7a92b04c5d6e..." },
       { "questionId": "favorite_movie", "answerHash": "sha256:9b81e02a4c1f..." }
     ],
-    "wallets": {
-      "domestic": {
-        "currency": "KRW",
-        "amount": { "$numberDecimal": "150000" }
-      },
-      "foreign": {
-        "currency": "USD",
-        "amount": { "$numberDecimal": "89.50" }
-      },
-      "bonus": {
-        "currency": "USD",
-        "amount": { "$numberDecimal": "12.00" }
-      }
-    },
+    "ownedWalletIds": [
+      { "$oid": "65f0000000000000000c2001" },
+      { "$oid": "65f0000000000000000c2002" },
+      { "$oid": "65f0000000000000000c2003" }
+    ],
     "ownedCardIds": [{ "$oid": "65f0000000000000000c2101" }],
     "linkedCardIds": [],
     "rewards": {
@@ -147,11 +138,13 @@
       { "questionId": "first_school", "answerHash": "sha256:abc..." },
       { "questionId": "first_pet",    "answerHash": "sha256:def..." }
     ],
-    "wallets": {
-      "domestic": { "currency": "KRW", "amount": { "$numberDecimal": "0" } },
-      "foreign":  { "currency": "USD", "amount": { "$numberDecimal": "0.00" } },
-      "bonus":    { "currency": "USD", "amount": { "$numberDecimal": "5.00" } }
-    },
+    "ownedWalletIds": [
+      { "$oid": "65f0000000000000000c2004" },
+      { "$oid": "65f0000000000000000c2005" },
+      { "$oid": "65f0000000000000000c2006" }
+    ],
+    "ownedCardIds": [],
+    "linkedCardIds": [],
     "rewards": { "tier": "silver", "points": 40, "nextTier": "gold", "pointsToNextTier": 60 },
     "paymentMethods": [],
     "savedItems": [],

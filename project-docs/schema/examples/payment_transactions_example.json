@@ -44,7 +44,7 @@
     "receivedBy": { "$oid": "65f0000000000000000a0001" },
     "method": {
       "kind": "wallet",
-      "wallet": "domestic",
+      "cardsAccountId": { "$oid": "65f0000000000000000c2001" },
       "walletTransactionId": { "$oid": "65f0000000000000000a2003" }
     },
     "amount": { "amount": { "$numberDecimal": "5000" }, "currency": "KRW" },

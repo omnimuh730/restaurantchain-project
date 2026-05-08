@@ -107,7 +107,7 @@ Used by `customer_users.subscription.{tier,billingCycle}`, `restaurants.subscrip
 }
 ```
 
-Used by the cache `customer_users.rewards.tier` and tier promotions written via `points_ledger`.
+Used by the cache `customer_users.rewards.tier` and tier promotions written via `rewards`.
 
 ### `_id: "amenities"`
 

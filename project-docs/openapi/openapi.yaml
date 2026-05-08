@@ -5,7 +5,7 @@ info:
   summary: HTTP API for the CatchTable POS and reservation app.
   description: |
     Endpoints derived from the page-driven READMEs in `api-docs/page-driven/` and the
-    15-collection MongoDB schema in `project-docs/schema/`.
+    14-collection MongoDB schema in `project-docs/schema/`.
 
     See the `README.md` next to this file for conventions (auth, errors, pagination,
     idempotency) and how to bundle/preview the multi-file spec.
@@ -36,7 +36,7 @@ tags:
   - name: Customer · Wallets
     description: Wallet balances, top-ups, gifts, transactions.
   - name: Customer · Credit cards
-    description: In-app stored-value cards (owned + linked access), distinct from wallets.
+    description: In-app `cards` with `type=card` (owned + linked); activity in `wallet_transactions`.
   - name: Customer · Reviews
     description: Restaurant reviews and discovery review feeds.
   - name: Customer · Rewards

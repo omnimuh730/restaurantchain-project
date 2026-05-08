@@ -303,7 +303,7 @@ x-operations:
               comment: { type: string, maxLength: 2000 }
     responses:
       '200':
-        description: Review saved. May credit `points_ledger` `review_bonus`.
+        description: Review saved. May credit `rewards` (`review_bonus`).
         content:
           application/json:
             schema:

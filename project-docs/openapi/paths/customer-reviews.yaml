@@ -115,7 +115,7 @@ x-operations:
                     id: { $ref: '../components/common.yaml#/components/schemas/ObjectId' }
                     reviewCount: { type: integer, minimum: 0 }
                     averageRating: { $ref: '../components/schemas.yaml#/components/schemas/RestaurantAverageRating' }
-                pointsAwarded: { type: integer, minimum: 0, description: 'When policy grants `review_bonus` on points_ledger.' }
+                pointsAwarded: { type: integer, minimum: 0, description: 'When policy grants `review_bonus` on `rewards`.' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
       '404': { $ref: '../components/common.yaml#/components/responses/NotFound' }
       '409':

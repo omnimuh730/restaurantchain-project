@@ -1,9 +1,73 @@
 [
   {
+    "_id": { "$oid": "65f0000000000000000c2001" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0001" },
+    "pool": "domestic",
+    "balanceKrw": { "$numberDecimal": "150000" },
+    "balanceUsd": { "$numberDecimal": "0" },
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-25T12:45:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000c2002" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0001" },
+    "pool": "foreign",
+    "balanceKrw": { "$numberDecimal": "0" },
+    "balanceUsd": { "$numberDecimal": "89.50" },
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-20T08:14:05.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000c2003" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0001" },
+    "pool": "bonus",
+    "balanceKrw": { "$numberDecimal": "0" },
+    "balanceUsd": { "$numberDecimal": "12.00" },
+    "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-24T08:13:09.000Z" }
+  },
+  {
     "_id": { "$oid": "65f0000000000000000c2101" },
+    "type": "card",
+    "ownerUserId": { "$oid": "65f0000000000000000c0001" },
     "cardNumber": "4812345678812",
     "passCode": "9921",
     "balanceKrw": { "$numberDecimal": "500000" },
-    "balanceUsd": { "$numberDecimal": "0" }
+    "balanceUsd": { "$numberDecimal": "0" },
+    "createdAt": { "$date": "2025-09-15T10:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-25T13:30:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000c2004" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0002" },
+    "pool": "domestic",
+    "balanceKrw": { "$numberDecimal": "0" },
+    "balanceUsd": { "$numberDecimal": "0" },
+    "createdAt": { "$date": "2025-12-15T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-12-15T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000c2005" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0002" },
+    "pool": "foreign",
+    "balanceKrw": { "$numberDecimal": "0" },
+    "balanceUsd": { "$numberDecimal": "10.00" },
+    "createdAt": { "$date": "2025-12-15T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-04-10T14:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "65f0000000000000000c2006" },
+    "type": "wallet",
+    "ownerUserId": { "$oid": "65f0000000000000000c0002" },
+    "pool": "bonus",
+    "balanceKrw": { "$numberDecimal": "0" },
+    "balanceUsd": { "$numberDecimal": "5.00" },
+    "createdAt": { "$date": "2025-12-15T00:00:00.000Z" },
+    "updatedAt": { "$date": "2025-12-15T00:00:00.000Z" }
   }
 ]

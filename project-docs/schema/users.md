@@ -24,7 +24,7 @@ Source READMEs:
 
 ## `customer_users`
 
-Single source of truth for the customer's profile, **wallet amounts cache**, **rewards cache**, **embedded social** (saved items, friends), **embedded payment methods**, **referral**, and **subscription summary**.
+Single source of truth for the customer's profile, **pointers to wallet and card rows** in `cards`, optional **balance/rewards cache**, **embedded social** (saved items, friends), **embedded payment methods**, **referral**, and **subscription summary**.
 
 ```ts
 type CustomerUser = {
@@ -45,21 +45,23 @@ type CustomerUser = {
     answerHash: string;             // hashed/salted, never plain text
   }>;
 
-  // Wallet amounts cache. Authoritative source: wallet_transactions.
-  wallets: {
-    domestic: { currency: "KRW" | string; amount: Decimal128 };
-    foreign:  { currency: "USD" | string; amount: Decimal128 };
-    bonus:    { currency: string;          amount: Decimal128 };
-  };
+  /**
+   * -> `cards._id` where `type === "wallet"` (typically domestic, foreign, bonus).
+   * Authoritative balances: `cards.balanceKrw` / `balanceUsd`, updated with `wallet_transactions`.
+   * @see `[cards.md](./cards.md)`
+   */
+  ownedWalletIds: ObjectId[];
 
   /**
-   * Pointers to `cards` collection only — no embedded card payloads.
-   * @see `[credit-cards.md](./credit-cards.md)`
+   * -> `cards._id` where `type === "card"`.
+   * @see `[cards.md](./cards.md)`
    */
-  ownedCardIds: ObjectId[];   // -> cards._id rows this user owns (card doc has no owner field)
-  linkedCardIds: ObjectId[];  // -> cards._id this user may use per link policy (stored outside `cards`)
+  ownedCardIds: ObjectId[];
 
-  // Rewards cache. Authoritative source: points_ledger.
+  /** -> `cards._id` this user may use per link policy (policy outside `cards`). */
+  linkedCardIds: ObjectId[];
+
+  // Rewards cache. Authoritative source: `rewards`.
   rewards: {
     tier: "silver" | "gold" | "platinum" | "diamond";
     points: number;
@@ -149,14 +151,13 @@ type CustomerUser = {
 - `{ status: 1, createdAt: -1 }`
 - `{ "savedItems.restaurantId": 1 }` (multikey, for "users who saved restaurant X")
 - `{ "friends.friendId": 1, "friends.status": 1 }` (multikey, for friend-edge lookup)
-- `{ "ownedCardIds": 1 }` (multikey), `{ "linkedCardIds": 1 }` (multikey) — optional; usually resolve cards by `_id` directly
-- `{ "wallets.domestic.amount": 1 }` only if you ever query by amount — usually not needed
+- `{ "ownedWalletIds": 1 }` (multikey), `{ "ownedCardIds": 1 }` (multikey), `{ "linkedCardIds": 1 }` (multikey) — optional; usually resolve `cards` by `_id` directly
 
 ### Notes
 
 - The `friends` array is bounded by social graph (typical: 50–500 entries). For users projected to exceed 1k, split friends into a separate collection later — schema-compatible because `friends[]` rows already carry `friendId`.
 - `dailyBonus.history` keeps last 30 entries inline; an archive job moves older entries to a cold collection if needed for analytics.
-- `ownedCardIds` / `linkedCardIds` should stay bounded (product cap, e.g. ≤ 50 each). Card payloads and balances live in the `cards` collection — see `[credit-cards.md](./credit-cards.md)`.
+- `ownedWalletIds` / `ownedCardIds` / `linkedCardIds` should stay bounded (product cap). Wallet and card rows (including balances) live in the `cards` collection — see `[cards.md](./cards.md)`.
 
 ---
 
@@ -267,8 +268,8 @@ type PasswordResetSession = {
 ## Cross-document rules
 
 - `customer_users.passwordHash`, `staff_users.passwordHash`, and any `securityAnswers[].answerHash` are never returned to clients.
-- **`cards`** holds only `cardNumber`, `passCode`, `balanceKrw`, `balanceUsd` (see `[credit-cards.md](./credit-cards.md)`). The user row stores **`ownedCardIds`** / **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` / `passCode`.
-- The cached `wallets.*.amount` and `rewards.points` are recomputed by the worker that consumes new `wallet_transactions` and `points_ledger` rows.
+- **`cards`** holds wallet rows (`type: "wallet"`, `pool`) and card rows (`type: "card"`, `cardNumber`, `passCode`) with **`balanceKrw` / `balanceUsd`** (see `[cards.md](./cards.md)`). The user row stores **`ownedWalletIds`**, **`ownedCardIds`**, and **`linkedCardIds`** only. Prefer hashing or encryption at rest for `cardNumber` / `passCode` on card rows.
+- Optional denormalized balance snapshots on the user (if any) and **`rewards.points`** are recomputed from **`wallet_transactions`**, **`cards`**, and **`rewards`** rows.
 - `staff_users` username is also globally unique to keep support tooling unambiguous.
 - A staff member can only belong to one restaurant; multi-restaurant chains will require a future schema split.
 - Pending staff sign-ups: created as a row inside `restaurants.pendingStaff[]`. Approval atomically inserts a `staff_users` row and removes the pending entry.
@@ -276,9 +277,8 @@ type PasswordResetSession = {
 ## Realtime channels
 
 - `user.profile.updated`
-- `user.wallets.updated`
-- `user.cardRefs.updated`
-- `card.balances.updated`
+- `user.storedValue.updated` — `ownedWalletIds` / `ownedCardIds` / `linkedCardIds` changed
+- `cards.balances.updated`
 - `user.rewards.updated`
 - `user.friends.updated`
 - `user.notifications.unreadCountChanged`

@@ -3,9 +3,10 @@ info:
   title: 'CatchTable Page-Driven — Customer Credit-style Cards'
   version: 1.0.0
   description: |
-    In-app stored-value cards: **`cards`** collection holds only `cardNumber`, `passCode`,
-    `balanceKrw`, `balanceUsd`. **`customer_users`** stores `ownedCardIds` / `linkedCardIds` only.
-    Append-only history in **`card_transactions`**. Distinct from `/me/wallets` and PSP `/me/payment-methods`.
+    In-app **`cards`** collection: both wallet rows (`type=wallet`, `pool`) and stored-value card rows
+    (`type=card`, `cardNumber`, `passCode`, balances). **`customer_users`** stores `ownedWalletIds`,
+    `ownedCardIds`, and `linkedCardIds`. Append-only activity for all accounts is **`wallet_transactions`**.
+    Distinct from PSP `/me/payment-methods`.
 paths:
   /me/cards:
     get: { $ref: '#/x-operations/ListMyCards' }
@@ -40,7 +41,7 @@ x-operations:
   CreateOwnedCard:
     tags: [Customer · Credit cards]
     operationId: createOwnedCard
-    summary: Create a `cards` row and append its id to `ownedCardIds`.
+    summary: Create a `cards` row (`type=card`) and append its id to `ownedCardIds`.
     description: |
       Server assigns a unique `cardNumber`, persists `passCode` on the card document,
       initializes balances (e.g. zero). Returns a safe projection without `passCode`.
@@ -91,8 +92,7 @@ x-operations:
     operationId: requestLinkByNumber
     summary: Verify card number + passCode and attach a link for the current user (policy on `customer_users`).
     description: |
-      On success, implementation updates link metadata / `linkedCardIds` as designed; **`cards`** stays
-      five fields only.
+      On success, implementation updates link metadata / `linkedCardIds` as designed.
     parameters:
       - $ref: '../components/common.yaml#/components/parameters/IdempotencyKeyHeader'
     requestBody:
@@ -122,7 +122,7 @@ x-operations:
   ListCardTransactions:
     tags: [Customer · Credit cards]
     operationId: listCardTransactions
-    summary: History for cards the user owns or is linked to.
+    summary: History for `cards` rows (`type=card`) the user owns or is linked to (`wallet_transactions`).
     parameters:
       - name: cardId
         in: query
@@ -141,5 +141,5 @@ x-operations:
                   properties:
                     data:
                       type: array
-                      items: { $ref: '../components/schemas.yaml#/components/schemas/CardTransaction' }
+                      items: { $ref: '../components/schemas.yaml#/components/schemas/WalletTransaction' }
       '401': { $ref: '../components/common.yaml#/components/responses/Unauthenticated' }
