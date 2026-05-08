@@ -19,3 +19,5 @@ restaurant/node_modules/
 
 # Lock files from generated docs/workflows dependencies can remain local
 project-docs/workflows/node_modules/
+**/node_modules/
+**/.env

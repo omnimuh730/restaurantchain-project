@@ -9,6 +9,11 @@ import { mountPublicRoutes } from './routes/public.js';
 import { mountAuthRoutes } from './routes/auth.js';
 import { mountCustomerRoutes } from './routes/customer.js';
 import { mountReservationRoutes } from './routes/reservations.js';
+import {
+  mountWalletTestnetCustomerRoutes,
+  mountWalletTestnetInternalRoutes,
+} from './routes/walletTestnet.js';
+import { mountInternalNotificationRoutes } from './routes/internalNotifications.js';
 
 const PORT = Number(process.env.PORT ?? 4001);
 const internalKey = process.env.INTERNAL_SERVICE_KEY ?? 'dev-internal-key';
@@ -42,6 +47,9 @@ app.get('/health', (_req, res) => {
 mountPublicRoutes(app, ctx);
 mountAuthRoutes(app, ctx);
 mountCustomerRoutes(app, ctx);
+mountWalletTestnetCustomerRoutes(app, ctx);
+mountWalletTestnetInternalRoutes(app, ctx);
+mountInternalNotificationRoutes(app, ctx);
 mountReservationRoutes(app, ctx);
 
 app.listen(PORT, () => {

@@ -23,6 +23,10 @@ export function createStore() {
   const savedItemsByUser = new Map();
   const friendsByUser = new Map();
   const recentSearchesByUser = new Map();
+  /** @type {Map<string, object>} */
+  const topUpIntents = new Map();
+  /** @type {Map<string, object>} idempotent TestNet charge results */
+  const processedTestnetCharges = new Map();
 
   function seedUser() {
     const id = 'customer-demo-1';
@@ -105,6 +109,8 @@ export function createStore() {
     savedItemsByUser,
     friendsByUser,
     recentSearchesByUser,
+    topUpIntents,
+    processedTestnetCharges,
     oid,
     nowIso,
   };
