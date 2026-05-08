@@ -18,7 +18,8 @@
     },
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-25T11:00:00.000Z" },
-    "deletedAt": null
+    "deletedAt": null,
+    "deletedBy": null
   },
   {
     "_id": { "$oid": "65f0000000000000000d0002" },
@@ -33,7 +34,8 @@
     "status": "available",
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-25T10:30:00.000Z" },
-    "deletedAt": null
+    "deletedAt": null,
+    "deletedBy": null
   },
   {
     "_id": { "$oid": "65f0000000000000000d0003" },
@@ -48,7 +50,8 @@
     "status": "needs_cleaning",
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-25T13:21:14.000Z" },
-    "deletedAt": null
+    "deletedAt": null,
+    "deletedBy": null
   },
   {
     "_id": { "$oid": "65f0000000000000000d0004" },
@@ -63,6 +66,7 @@
     "status": "out_of_service",
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "updatedAt": { "$date": "2026-04-23T09:00:00.000Z" },
-    "deletedAt": null
+    "deletedAt": null,
+    "deletedBy": null
   }
 ]

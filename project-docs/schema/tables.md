@@ -42,7 +42,9 @@ type Table = {
 
   createdAt: Date;
   updatedAt: Date;
+  /** Soft delete when a table is removed from the floor plan — never hard-remove while referenced. */
   deletedAt?: Date | null;
+  deletedBy?: ObjectId | null;     // staff who removed the table from layout
 };
 ```
 
@@ -65,12 +67,12 @@ any ─manager toggle──▶ out_of_service ─manager toggle──▶ availab
 ### Realtime channels
 
 - `table.updated` — emitted on any field change (status, occupancy).
-- `table.created` / `table.deleted` — emitted on layout edits.
+- `table.created` / `table.deleted` — emitted on layout edits (delete is **soft**: `deletedAt` set).
 
 ---
 
 ## Cross-document rules
 
 - A reservation moving to `arrived` flips this table to `occupied` and sets `occupancy.reservationId` and `occupancy.orderId` in one update.
-- Layout edits in the Floor Plan editor batch-replace tables for that floor; tables not present in the request are soft-deleted (`deletedAt` set).
+- Layout edits in the Floor Plan editor batch-replace tables for that floor; tables not present in the request are soft-deleted (`deletedAt` / `deletedBy` set).
 - Floor renaming is performed on `restaurants.floors[i].name`; tables continue to point at `floorId`.

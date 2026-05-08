@@ -19,9 +19,9 @@
     },
     "deposit":    { "amount": { "$numberDecimal": "60000" }, "currency": "KRW" },
     "paymentId": { "$oid": "65f0000000000000000e0010" },
+    "orderId":   { "$oid": "65f0000000000000000a1001" },
     "refundId":  null,
     "tableId":   { "$oid": "65f0000000000000000d0001" },
-    "orderId":   { "$oid": "65f0000000000000000a1001" },
     "status": "dining",
     "invites": [
       {
@@ -67,6 +67,7 @@
     "preferences": { "seating": ["indoor"], "cuisine": ["japanese"], "vibe": [], "amenities": [] },
     "deposit":    { "amount": { "$numberDecimal": "120000" }, "currency": "KRW" },
     "paymentId": null,
+    "orderId":   null,
     "refundId":  null,
     "status": "visited",
     "invites": [],

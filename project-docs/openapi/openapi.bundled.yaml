@@ -1893,7 +1893,7 @@ paths:
                   redemptions:
                     type: array
                     items:
-                      $ref: '#/components/schemas/redemptions-items'
+                      $ref: '#/components/schemas/items-2'
                   reward:
                     $ref: '#/components/schemas/Money'
         '401':
@@ -8700,6 +8700,13 @@ components:
             - string
             - 'null'
           format: date-time
+        deletedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
         createdAt:
           type: string
           format: date-time
@@ -8890,7 +8897,7 @@ components:
                 - coupon
             couponCode:
               type: string
-    redemptions-items:
+    items-2:
       type: object
       properties:
         refereeUserId:
@@ -9816,6 +9823,12 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/OperatingHours'
+            nonOperatingDates:
+              type: array
+              description: Calendar closure dates (YYYY-MM-DD, restaurant local tz); full day off regardless of weekly hours.
+              items:
+                type: string
+                format: date
         security:
           type: object
           required:
@@ -9898,6 +9911,8 @@ components:
             - string
             - 'null'
           format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
     MenuSubcategory:
       type: object
       required:
@@ -9914,6 +9929,13 @@ components:
           type: integer
         isActive:
           type: boolean
+        deletedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
     MenuCategory:
       type: object
       required:
@@ -9934,6 +9956,13 @@ components:
           type: integer
         isActive:
           type: boolean
+        deletedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
         subcategories:
           type: array
           items:
@@ -10039,6 +10068,8 @@ components:
             - string
             - 'null'
           format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
         createdAt:
           type: string
           format: date-time
@@ -10107,6 +10138,8 @@ components:
             - string
             - 'null'
           format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
     PendingStaffRequest:
       type: object
       required:
@@ -10483,11 +10516,11 @@ components:
           $ref: '#/components/schemas/Money'
         paymentId:
           $ref: '#/components/schemas/ObjectId'
+        orderId:
+          $ref: '#/components/schemas/ObjectId'
         refundId:
           $ref: '#/components/schemas/ObjectId'
         tableId:
-          $ref: '#/components/schemas/ObjectId'
-        orderId:
           $ref: '#/components/schemas/ObjectId'
         status:
           type: string
@@ -10717,6 +10750,8 @@ components:
             - string
             - 'null'
           format: date-time
+        deletedBy:
+          $ref: '#/components/schemas/ObjectId'
     OrderBill:
       type: object
       required:

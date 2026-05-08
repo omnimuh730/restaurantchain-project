@@ -96,6 +96,11 @@ type Restaurant = {
         close: string;                 // "22:00"
         closed?: boolean;
       }>;
+      /**
+       * Calendar dates (YYYY-MM-DD in restaurant local tz) when the venue is **fully closed**
+       * regardless of weekly `operatingHours` (holidays, private buyouts, maintenance days).
+       */
+      nonOperatingDates: string[];
     };
   };
 
@@ -105,7 +110,9 @@ type Restaurant = {
     name: string;                   // "Main", "Patio"
     sortOrder: number;
     isPublished: boolean;
+    /** Soft delete — never hard-remove floor rows referenced by layout/history. */
     deletedAt?: Date | null;
+    deletedBy?: ObjectId | null;   // staff who removed from published layout
   }>;
 
   // ---- Embedded: Menu ----
@@ -116,11 +123,15 @@ type Restaurant = {
       iconUrl?: string;
       sortOrder: number;
       isActive: boolean;
+      deletedAt?: Date | null;
+      deletedBy?: ObjectId | null;
       subcategories: Array<{
         _id: ObjectId;
         name: string;               // "Cold Appetizers"
         sortOrder: number;
         isActive: boolean;
+        deletedAt?: Date | null;
+        deletedBy?: ObjectId | null;
       }>;
     }>;
     items: Array<{
@@ -137,6 +148,7 @@ type Restaurant = {
 
       isActive: boolean;
       deletedAt?: Date | null;
+      deletedBy?: ObjectId | null;
       createdAt: Date;
       updatedAt: Date;
     }>;
@@ -156,6 +168,7 @@ type Restaurant = {
     createdBy: ObjectId;            // staff user
     addedAt: Date;
     deletedAt?: Date | null;
+    deletedBy?: ObjectId | null;
   }>;
 
   // ---- Embedded: Pending staff sign-ups inbox ----
@@ -188,12 +201,20 @@ type Restaurant = {
 - `{ "menu.items._id": 1 }` (multikey, lookup by item id from order snapshots)
 - `{ "menu.items.categoryId": 1 }` (multikey, POS Orders catalog browsing)
 - `{ "menu.items.name": 1 }` (multikey, Menu Analysis cross-restaurant when scoped)
+- `{ "settings.general.nonOperatingDates": 1 }` (multikey, optional — block-out date queries)
 
 ### State machine
 
 ```text
 pending_approval ─approve─▶ active ─suspend─▶ suspended ─reactivate─▶ active
 ```
+
+### Soft delete (menu, floors, deposit cards, tenant)
+
+**Do not hard-delete** rows that can be referenced historically (orders, analytics, payouts). Use:
+
+- `deletedAt: Date` and optionally **`deletedBy: ObjectId`** (staff) when a manager “removes” a category, subcategory, menu item, floor, or deposit card.
+- POS and discovery UIs filter to `deletedAt == null` (and `isActive` / `isPublished` as applicable). Order snapshots continue to reference `menu.items[]._id` even after soft delete.
 
 ### Why menu is embedded
 
@@ -215,7 +236,8 @@ Tables carry runtime status (`available | reserved | occupied | needs_cleaning |
 - The default `depositCards[i].isDefault === true` is the card customer payments settle into.
 - Floor edits replace the floor's contents transactionally; tables not in the request are soft-deleted in the `tables` collection.
 - Staff sign-up appends a row into `pendingStaff[]`; approval atomically inserts a `staff_users` row and removes the pending entry.
-- Menu item soft-delete (`menu.items[i].deletedAt`) keeps the row available for historical order rendering.
+- Menu soft-delete (`deletedAt` / `deletedBy` on categories, subcategories, items) keeps rows for historical order rendering; listings exclude deleted rows.
+- `settings.general.nonOperatingDates` blocks reservations for those calendar dates in addition to weekly hours.
 - Restaurant subscription is persisted directly in this document (`subscription.`*) and validated against `metadata.subscription_plans`.
 
 ## Realtime channels

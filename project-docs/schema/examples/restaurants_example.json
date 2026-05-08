@@ -52,12 +52,13 @@
           { "day": 4, "open": "18:00", "close": "23:00" },
           { "day": 5, "open": "18:00", "close": "00:00" },
           { "day": 6, "open": "12:00", "close": "00:00" }
-        ]
+        ],
+        "nonOperatingDates": ["2026-05-05", "2026-09-24", "2026-12-25"]
       }
     },
     "floors": [
-      { "_id": { "$oid": "65f0000000000000000f0001" }, "name": "Main",  "sortOrder": 0, "isPublished": true, "deletedAt": null },
-      { "_id": { "$oid": "65f0000000000000000f0002" }, "name": "Patio", "sortOrder": 1, "isPublished": true, "deletedAt": null }
+      { "_id": { "$oid": "65f0000000000000000f0001" }, "name": "Main",  "sortOrder": 0, "isPublished": true, "deletedAt": null, "deletedBy": null },
+      { "_id": { "$oid": "65f0000000000000000f0002" }, "name": "Patio", "sortOrder": 1, "isPublished": true, "deletedAt": null, "deletedBy": null }
     ],
     "menu": {
       "categories": [
@@ -67,9 +68,11 @@
           "iconUrl": "https://cdn.example/icons/app.png",
           "sortOrder": 0,
           "isActive": true,
+          "deletedAt": null,
+          "deletedBy": null,
           "subcategories": [
-            { "_id": { "$oid": "65f0000000000000000b1101" }, "name": "Cold",   "sortOrder": 0, "isActive": true },
-            { "_id": { "$oid": "65f0000000000000000b1102" }, "name": "Warm",   "sortOrder": 1, "isActive": true }
+            { "_id": { "$oid": "65f0000000000000000b1101" }, "name": "Cold",   "sortOrder": 0, "isActive": true, "deletedAt": null, "deletedBy": null },
+            { "_id": { "$oid": "65f0000000000000000b1102" }, "name": "Warm",   "sortOrder": 1, "isActive": true, "deletedAt": null, "deletedBy": null }
           ]
         },
         {
@@ -77,9 +80,11 @@
           "name": "Sushi",
           "sortOrder": 1,
           "isActive": true,
+          "deletedAt": null,
+          "deletedBy": null,
           "subcategories": [
-            { "_id": { "$oid": "65f0000000000000000b1201" }, "name": "Nigiri", "sortOrder": 0, "isActive": true },
-            { "_id": { "$oid": "65f0000000000000000b1202" }, "name": "Maki",   "sortOrder": 1, "isActive": true }
+            { "_id": { "$oid": "65f0000000000000000b1201" }, "name": "Nigiri", "sortOrder": 0, "isActive": true, "deletedAt": null, "deletedBy": null },
+            { "_id": { "$oid": "65f0000000000000000b1202" }, "name": "Maki",   "sortOrder": 1, "isActive": true, "deletedAt": null, "deletedBy": null }
           ]
         }
       ],
@@ -96,6 +101,7 @@
           "price": { "amount": { "$numberDecimal": "9000" }, "currency": "KRW" },
           "isActive": true,
           "deletedAt": null,
+          "deletedBy": null,
           "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
           "updatedAt": { "$date": "2026-03-01T00:00:00.000Z" }
         },
@@ -109,6 +115,7 @@
           "price": { "amount": { "$numberDecimal": "32.00" }, "currency": "USD" },
           "isActive": true,
           "deletedAt": null,
+          "deletedBy": null,
           "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
           "updatedAt": { "$date": "2026-04-22T00:00:00.000Z" }
         },
@@ -121,6 +128,7 @@
           "price": { "amount": { "$numberDecimal": "18.00" }, "currency": "USD" },
           "isActive": true,
           "deletedAt": null,
+          "deletedBy": null,
           "createdAt": { "$date": "2025-08-10T00:00:00.000Z" },
           "updatedAt": { "$date": "2026-04-22T00:00:00.000Z" }
         }
@@ -139,7 +147,8 @@
         "registrationMode": "scan",
         "createdBy": { "$oid": "65f0000000000000000a0001" },
         "addedAt": { "$date": "2025-08-01T00:30:00.000Z" },
-        "deletedAt": null
+        "deletedAt": null,
+        "deletedBy": null
       }
     ],
     "pendingStaff": [

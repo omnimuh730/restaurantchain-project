@@ -91,7 +91,7 @@ The deliberate choice is to embed where data is **bounded, mostly read with the 
 ### Timestamps
 
 - `createdAt: Date` and `updatedAt: Date` on every collection.
-- `deletedAt: Date | null` for soft delete on collections that need it.
+- **Soft delete:** prefer **`deletedAt: Date | null`** and **`deletedBy: ObjectId | null`** (staff actor for POS) instead of hard-deleting rows. Filter active data with `deletedAt == null`. Restaurant **menu** embeds, **floors**, **deposit cards**, **`tables`**, **`staff_users`**, and the restaurant document itself follow this pattern unless noted otherwise.
 
 ### Money
 

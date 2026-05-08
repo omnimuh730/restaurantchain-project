@@ -181,6 +181,10 @@ type StaffUser = {
   rejectedAt?: Date;
   inactivatedAt?: Date | null;
 
+  /** Soft archive — row stays for audit; login disabled when set. */
+  deletedAt?: Date | null;
+  deletedBy?: ObjectId | null;
+
   createdAt: Date;
   updatedAt: Date;
 };
@@ -199,7 +203,7 @@ pending_approval ─approve─▶ active ─inactivate─▶ inactive ─activat
                   ─reject──▶ rejected
 ```
 
-Pending staff sign-ups also surface as `restaurants.pendingStaff[]` until the manager approves or rejects them. On approve, the entry is consumed and a fresh `staff_users` row is inserted with `status: "active"`. See `[restaurants.md](./restaurants.md)`.
+Pending staff sign-ups also surface as `restaurants.pendingStaff[]` until the manager approves or rejects them. On approve, the entry is consumed and a fresh `staff_users` row is inserted with `status: "active"`. See `[restaurants.md](./restaurants.md)`. Removing a staff member from the roster should use **`deletedAt` / `deletedBy`** (soft delete), not a hard remove.
 
 ---
 

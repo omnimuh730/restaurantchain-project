@@ -55,12 +55,12 @@ type Reservation = {
   deposit:    { amount: Decimal128; currency: string };
 
   // Linked finance + flow
-  paymentId?: ObjectId | null;      // -> payments (after capture)
-  refundId?: ObjectId | null;       // -> refunds (embedded on payments[i].refunds[])
+  paymentId?: ObjectId | null;      // -> payment_transactions (after capture)
+  orderId?: ObjectId | null;        // POS order created on arrival / dining session
+  refundId?: ObjectId | null;       // -> refunds (embedded on payment_transactions[].refunds[])
 
   // Linked POS objects
   tableId?: ObjectId | null;        // assigned at check-in
-  orderId?: ObjectId | null;        // POS order created on arrival
 
   status:
     | "requested"

@@ -28,7 +28,8 @@ Auxiliary auth-infra (TTL'd, not part of the count above): `sessions`, `password
 - `_id: ObjectId` on every document.
 - Cross-references: `<entity>Id: ObjectId`.
 - Money: `{ amount: Decimal128; currency: "KRW" | "USD" | string }`. Never floats. Never auto-converted.
-- Timestamps: `createdAt`, `updatedAt`. Soft delete via `deletedAt`.
+- Timestamps: `createdAt`, `updatedAt`.
+- **Soft delete:** business “delete” operations **do not remove documents** (or embedded rows). Set **`deletedAt`** and, where a human actor should be audited, **`deletedBy`** (`ObjectId` → `staff_users` for POS actions). Active listings filter `deletedAt == null`. Applies to restaurant **menu** (categories, subcategories, items), **floors**, **deposit cards**, **`tables`**, and other entities documented with these fields.
 - Multi-tenant: POS-side carries `restaurantId`; customer-side carries `userId`; `reservations` and `payment_transactions` carry both as needed.
 - Status fields are snake_case strings.
 - Indexes: foreign keys + `(tenantId, status, createdAt desc)` for feeds + TTL on transient docs + 2dsphere for geo.
@@ -152,6 +153,8 @@ type StaffUser = {
   approvedBy?: ObjectId; approvedAt?: Date;
   rejectedBy?: ObjectId; rejectedAt?: Date;
   inactivatedAt?: Date | null;
+  deletedAt?: Date | null;
+  deletedBy?: ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -199,21 +202,23 @@ type Restaurant = {
       deposit: { moneyType: "domestic" | "foreign"; amount: Decimal128 };
       gracePeriodMinutes: number;
       operatingHours: Array<{ day: 0|1|2|3|4|5|6; open: string; close: string; closed?: boolean }>;
+      nonOperatingDates: string[];
     };
   };
 
-  floors: Array<{ _id: ObjectId; name: string; sortOrder: number; isPublished: boolean; deletedAt?: Date | null }>;
+  floors: Array<{ _id: ObjectId; name: string; sortOrder: number; isPublished: boolean; deletedAt?: Date | null; deletedBy?: ObjectId | null }>;
 
   menu: {
     categories: Array<{
       _id: ObjectId; name: string; iconUrl?: string; sortOrder: number; isActive: boolean;
-      subcategories: Array<{ _id: ObjectId; name: string; sortOrder: number; isActive: boolean }>;
+      deletedAt?: Date | null; deletedBy?: ObjectId | null;
+      subcategories: Array<{ _id: ObjectId; name: string; sortOrder: number; isActive: boolean; deletedAt?: Date | null; deletedBy?: ObjectId | null }>;
     }>;
     items: Array<{
       _id: ObjectId; categoryId: ObjectId; subcategoryId?: ObjectId | null;
       name: string; shortName?: string; description?: string; imageUrl?: string; tags?: string[];
       price: { amount: Decimal128; currency: string };
-      isActive: boolean; deletedAt?: Date | null;
+      isActive: boolean; deletedAt?: Date | null; deletedBy?: ObjectId | null;
       createdAt: Date; updatedAt: Date;
     }>;
   };
@@ -222,7 +227,7 @@ type Restaurant = {
     _id: ObjectId; pspProvider: string; pspExternalId: string;
     brand: string; last4: string; expMonth: number; expYear: number;
     isDefault: boolean; registrationMode: "scan" | "type";
-    createdBy: ObjectId; addedAt: Date; deletedAt?: Date | null;
+    createdBy: ObjectId; addedAt: Date; deletedAt?: Date | null; deletedBy?: ObjectId | null;
   }>;
 
   pendingStaff: Array<{
@@ -259,7 +264,7 @@ type Table = {
     seatedAt: Date;
     partySize?: number;
   };
-  createdAt: Date; updatedAt: Date; deletedAt?: Date | null;
+  createdAt: Date; updatedAt: Date; deletedAt?: Date | null; deletedBy?: ObjectId | null;
 };
 ```
 
@@ -285,9 +290,9 @@ type Reservation = {
   preferences: { seating: string[]; cuisine: string[]; vibe: string[]; amenities: string[] };
   deposit:    { amount: Decimal128; currency: string };
   paymentId?: ObjectId | null;
+  orderId?: ObjectId | null;
   refundId?: ObjectId | null;
   tableId?: ObjectId | null;
-  orderId?: ObjectId | null;
   status:
     | "requested" | "confirmed" | "declined"
     | "arrived" | "dining" | "bill_requested" | "bill"

@@ -20,7 +20,10 @@
     "approvedBy": null,
     "approvedAt": { "$date": "2025-08-01T00:00:00.000Z" },
     "createdAt": { "$date": "2025-08-01T00:00:00.000Z" },
-    "updatedAt": { "$date": "2026-04-25T14:01:00.000Z" }
+    "updatedAt": { "$date": "2026-04-25T14:01:00.000Z" },
+    "inactivatedAt": null,
+    "deletedAt": null,
+    "deletedBy": null
   },
   {
     "_id": { "$oid": "65f0000000000000000a0002" },
@@ -35,7 +38,10 @@
     "approvedBy": { "$oid": "65f0000000000000000a0001" },
     "approvedAt": { "$date": "2025-09-15T11:22:00.000Z" },
     "createdAt": { "$date": "2025-09-15T10:00:00.000Z" },
-    "updatedAt": { "$date": "2026-04-25T13:45:00.000Z" }
+    "updatedAt": { "$date": "2026-04-25T13:45:00.000Z" },
+    "inactivatedAt": null,
+    "deletedAt": null,
+    "deletedBy": null
   },
   {
     "_id": { "$oid": "65f0000000000000000a0003" },
@@ -48,6 +54,9 @@
     "permissions": ["orders.create", "orders.send"],
     "status": "pending_approval",
     "createdAt": { "$date": "2026-04-24T11:38:00.000Z" },
-    "updatedAt": { "$date": "2026-04-24T11:38:00.000Z" }
+    "updatedAt": { "$date": "2026-04-24T11:38:00.000Z" },
+    "inactivatedAt": null,
+    "deletedAt": null,
+    "deletedBy": null
   }
 ]

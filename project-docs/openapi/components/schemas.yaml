@@ -257,6 +257,8 @@ components:
         rejectedBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
         rejectedAt:        { type: string, format: date-time }
         inactivatedAt:     { type: [string, 'null'], format: date-time }
+        deletedAt:         { type: [string, 'null'], format: date-time }
+        deletedBy:         { $ref: './common.yaml#/components/schemas/ObjectId' }
         createdAt:         { type: string, format: date-time }
         updatedAt:         { type: string, format: date-time }
 
@@ -368,6 +370,10 @@ components:
             operatingHours:
               type: array
               items: { $ref: '#/components/schemas/OperatingHours' }
+            nonOperatingDates:
+              type: array
+              description: 'Calendar closure dates (YYYY-MM-DD, restaurant local tz); full day off regardless of weekly hours.'
+              items: { type: string, format: date }
         security:
           type: object
           required: [passwordPolicy, notificationsMuted]
@@ -415,6 +421,7 @@ components:
         sortOrder:    { type: integer, minimum: 0 }
         isPublished:  { type: boolean }
         deletedAt:    { type: [string, 'null'], format: date-time }
+        deletedBy:    { $ref: './common.yaml#/components/schemas/ObjectId' }
 
     Menu:
       type: object
@@ -436,6 +443,8 @@ components:
         iconUrl:       { type: string, format: uri-reference }
         sortOrder:     { type: integer }
         isActive:      { type: boolean }
+        deletedAt:     { type: [string, 'null'], format: date-time }
+        deletedBy:     { $ref: './common.yaml#/components/schemas/ObjectId' }
         subcategories:
           type: array
           items: { $ref: '#/components/schemas/MenuSubcategory' }
@@ -448,6 +457,8 @@ components:
         name:      { type: string }
         sortOrder: { type: integer }
         isActive:  { type: boolean }
+        deletedAt: { type: [string, 'null'], format: date-time }
+        deletedBy: { $ref: './common.yaml#/components/schemas/ObjectId' }
 
     MenuItem:
       type: object
@@ -481,6 +492,7 @@ components:
             revenue30d:   { $ref: './common.yaml#/components/schemas/Money' }
         isActive:      { type: boolean }
         deletedAt:     { type: [string, 'null'], format: date-time }
+        deletedBy:     { $ref: './common.yaml#/components/schemas/ObjectId' }
         createdAt:     { type: string, format: date-time }
         updatedAt:     { type: string, format: date-time }
 
@@ -513,6 +525,7 @@ components:
         createdBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
         addedAt:          { type: string, format: date-time }
         deletedAt:        { type: [string, 'null'], format: date-time }
+        deletedBy:        { $ref: './common.yaml#/components/schemas/ObjectId' }
 
     Table:
       type: object
@@ -557,6 +570,7 @@ components:
         createdAt:    { type: string, format: date-time }
         updatedAt:    { type: string, format: date-time }
         deletedAt:    { type: [string, 'null'], format: date-time }
+        deletedBy:    { $ref: './common.yaml#/components/schemas/ObjectId' }
 
     # ===========================================================
     # Reservations
@@ -585,9 +599,9 @@ components:
         preferences:        { $ref: '#/components/schemas/ReservationPreferences' }
         deposit:            { $ref: './common.yaml#/components/schemas/Money' }
         paymentId:          { $ref: './common.yaml#/components/schemas/ObjectId' }
+        orderId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
         refundId:           { $ref: './common.yaml#/components/schemas/ObjectId' }
         tableId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
-        orderId:            { $ref: './common.yaml#/components/schemas/ObjectId' }
         status:
           type: string
           enum: [requested, confirmed, declined, arrived, dining, bill_requested, bill, visited, cancelled, no_show]
